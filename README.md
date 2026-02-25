@@ -14,8 +14,20 @@ DreamCode 是一个面向中文用户的编码面试辅助工具，通过快捷�
 - 笔试题目：不会导致笔试网页失焦，可规避"跳出网页"检测
 - 其他场景（如英语机试等）：可通过"自定义提示词"功能自行扩展
 
+### 使用界面
 
-## 相比原项目的改进
+主页面
+![portal](screenshot\portal.png)
+
+设置页
+![settings](screenshot\settings.png)
+
+### 对话效果
+
+![chat](screenshot\chat.png)
+
+
+## 项目改进之处
 
 ### 新增功能
 
