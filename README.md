@@ -1,5 +1,7 @@
 # DreamCode
 
+![dc](resources/fav.png)
+
 AI 驱动的编码面试助手，支持实时截屏分析、隐身窗口、深色模式，适配国内 AI 生态。
 
 > 本项目基于 [interview-coder-cn](https://github.com/ooboqoo/interview-coder-cn) 二次开发。
