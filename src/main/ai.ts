@@ -45,7 +45,7 @@ function getSystemPrompt(): string {
   )
 }
 
-function getMaxTokens(): number | undefined {
+function getMaxOutputTokens(): number | undefined {
   // Anthropic API requires max_tokens; SDK has built-in defaults per model,
   // but we set an explicit fallback for custom/unknown models
   return settings.apiProvider === 'anthropic' ? 8192 : undefined
@@ -55,7 +55,7 @@ export function getSolutionStream(base64Image: string, abortSignal?: AbortSignal
   const { textStream } = streamText({
     model: getModelProvider(settings),
     system: getSystemPrompt(),
-    maxTokens: getMaxTokens(),
+    maxOutputTokens: getMaxOutputTokens(),
     messages: [
       {
         role: 'user',
@@ -100,7 +100,7 @@ export function getFollowUpStream(
   const { textStream } = streamText({
     model: getModelProvider(settings),
     system: getSystemPrompt(),
-    maxTokens: getMaxTokens(),
+    maxOutputTokens: getMaxOutputTokens(),
     messages: updatedMessages,
     abortSignal,
     onError: (err) => {
@@ -117,7 +117,7 @@ export function getGeneralStream(messages: ModelMessage[], abortSignal?: AbortSi
       settings.customPrompt ||
       PROMPT_SYSTEM +
         `\n使用编程语言：${settings.codeLanguage} 解答。\n\n注意：如果有多张截图，请结合所有截图内容进行完整分析，不要遗漏任何部分。`,
-    maxTokens: getMaxTokens(),
+    maxOutputTokens: getMaxOutputTokens(),
     messages,
     abortSignal,
     onError: (err) => {
