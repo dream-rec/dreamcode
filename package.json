@@ -1,6 +1,6 @@
 {
   "name": "dreamcode",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "DreamCode - AI coding assistant with stealth mode, dual API support and dark mode",
   "main": "./out/main/index.js",
   "scripts": {
