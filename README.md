@@ -16,15 +16,17 @@ DreamCode 是一个面向中文用户的编码面试辅助工具，通过快捷�
 
 ### 使用界面
 
-主页面
-![portal](screenshot\portal.png)
+<p align="center">主页面</p>
 
-设置页
-![settings](screenshot\settings.png)
+![portal](screenshot/portal.png)
+
+<p align="center">设置页</p>
+
+![settings](screenshot/settings.png)
 
 ### 对话效果
 
-![chat](screenshot\chat.png)
+![chat](screenshot/chat.png)
 
 
 ## 项目改进之处
