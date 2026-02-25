@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(findstr:*)",
+      "Bash(node:*)",
+      "Bash(del:*)",
+      "Bash(npx electron-vite build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm view:*)",
+      "Bash(npm uninstall:*)"
+    ]
+  }
+}

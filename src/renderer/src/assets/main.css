@@ -1,0 +1,42 @@
+@import './base.css';
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply text-foreground;
+  }
+}
+
+/* macOS-style window container */
+#root {
+  border-radius: 12px;
+  overflow: hidden;
+  background: transparent;
+}
+
+#app-header {
+  @apply h-9 text-sm text-gray-700;
+  background: rgba(236, 236, 236, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-app-region: drag;
+  .actions {
+    -webkit-app-region: no-drag;
+  }
+}
+
+#app-content {
+  @apply h-[calc(100vh-36px)] overflow-y-auto;
+  background: rgba(246, 246, 246, 0.88);
+  backdrop-filter: blur(16px);
+}
+
+.dark #app-header {
+  @apply text-gray-300;
+  background: rgba(30, 30, 30, 0.92);
+}
+
+.dark #app-content {
+  background: rgba(24, 24, 24, 0.88);
+}
