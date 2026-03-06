@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [proxyUrl, setProxyUrl] = useState(settingsStore.proxyUrl)
   const [codeLanguage, setCodeLanguage] = useState(settingsStore.codeLanguage)
   const [opacity, setOpacity] = useState(settingsStore.opacity)
+  const [fontSize, setFontSize] = useState(settingsStore.fontSize)
 
   const [showApiKey, setShowApiKey] = useState(false)
   const [enableCustomPrompt, setEnableCustomPrompt] = useState(customPrompt.trim().length > 0)
@@ -59,7 +60,7 @@ export default function SettingsPage() {
   }
 
   const commitSettings = () => {
-    const newSettings = { apiProvider, apiBaseURL, apiKey, model, customPrompt, proxyUrl, codeLanguage, opacity }
+    const newSettings = { apiProvider, apiBaseURL, apiKey, model, customPrompt, proxyUrl, codeLanguage, opacity, fontSize }
     settingsStore.syncSettings(newSettings)
     window.api.updateAppSettings(getCloneableFields({ ...settingsStore, ...newSettings }))
   }
@@ -288,6 +289,25 @@ export default function SettingsPage() {
                   }}
                 />
                 <span className="text-xs whitespace-nowrap">不透明</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                回复字体大小
+                <span className="ml-2 text-xs font-light">当前 {fontSize}px</span>
+              </label>
+              <div className="w-60 flex items-center gap-2">
+                <span className="text-xs whitespace-nowrap">12px</span>
+                <Slider
+                  min={12}
+                  max={24}
+                  step={1}
+                  value={[fontSize]}
+                  onValueChange={(value) => {
+                    setFontSize(value[0])
+                  }}
+                />
+                <span className="text-xs whitespace-nowrap">24px</span>
               </div>
             </div>
           </div>

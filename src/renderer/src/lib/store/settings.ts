@@ -11,6 +11,7 @@ interface Settings {
 
   theme: 'light' | 'dark'
   opacity: number
+  fontSize: number
   codeLanguage: string
 }
 
@@ -29,7 +30,8 @@ const defaultSettings: Settings = {
   codeLanguage: '',
 
   theme: 'light',
-  opacity: 0.8
+  opacity: 0.8,
+  fontSize: 14
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -45,7 +47,7 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'dreamcode-settings',
-      version: 6
+      version: 7
     }
   )
 )
