@@ -20,7 +20,8 @@ ipcMain.handle('updateAppSettings', (_event, _settings) => {
     apiKey: settings.apiKey,
     model: settings.model,
     codeLanguage: settings.codeLanguage,
-    customPrompt: settings.customPrompt
+    customPrompt: settings.customPrompt,
+    proxyUrl: settings.proxyUrl
   }
   saveConfig(configFields)
 })

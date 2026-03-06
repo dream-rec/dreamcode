@@ -9,6 +9,7 @@ export interface AppConfig {
   model: string
   codeLanguage: string
   customPrompt: string
+  proxyUrl: string
 }
 
 const defaultConfig: AppConfig = {
@@ -17,7 +18,8 @@ const defaultConfig: AppConfig = {
   apiKey: '',
   model: '',
   codeLanguage: 'typescript',
-  customPrompt: ''
+  customPrompt: '',
+  proxyUrl: ''
 }
 
 function getConfigPath(): string {

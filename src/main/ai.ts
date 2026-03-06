@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { streamText, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { settings, type AppSettings } from './settings'
 
 export const PROMPT_SYSTEM = readFileSync(join(import.meta.dirname, 'prompts.md'), 'utf-8').trim()
@@ -20,21 +21,27 @@ function getAnthropicBaseURL(url: string | undefined): string | undefined {
   return trimmed + '/v1'
 }
 
+function createProxyFetch(proxyUrl: string): typeof globalThis.fetch {
+  const dispatcher = new ProxyAgent(proxyUrl)
+  return ((input: any, init?: any) =>
+    undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch
+}
+
 function getModelProvider(_settings: AppSettings) {
+  const proxyFetch = _settings.proxyUrl ? createProxyFetch(_settings.proxyUrl) : undefined
+
   if (_settings.apiProvider === 'anthropic') {
-    // Anthropic Messages API: POST {baseURL}/messages
-    // SDK default baseURL: https://api.anthropic.com/v1
-    // Headers: x-api-key, anthropic-version: 2023-06-01
     const anthropic = createAnthropic({
       baseURL: getAnthropicBaseURL(_settings.apiBaseURL) || undefined,
-      apiKey: _settings.apiKey
+      apiKey: _settings.apiKey,
+      fetch: proxyFetch
     })
     return anthropic(_settings.model)
   }
-  // OpenAI-compatible API: POST {baseURL}/chat/completions
   const openai = createOpenAI({
     baseURL: _settings.apiBaseURL || undefined,
-    apiKey: _settings.apiKey
+    apiKey: _settings.apiKey,
+    fetch: proxyFetch
   })
   return openai.chat(_settings.model)
 }

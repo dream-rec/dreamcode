@@ -10,7 +10,8 @@ import {
   Eye,
   EyeOff,
   Keyboard,
-  Save
+  Save,
+  Globe
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
@@ -31,6 +32,7 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState(settingsStore.apiKey)
   const [model, setModel] = useState(settingsStore.model)
   const [customPrompt, setCustomPrompt] = useState(settingsStore.customPrompt)
+  const [proxyUrl, setProxyUrl] = useState(settingsStore.proxyUrl)
   const [codeLanguage, setCodeLanguage] = useState(settingsStore.codeLanguage)
   const [opacity, setOpacity] = useState(settingsStore.opacity)
 
@@ -57,7 +59,7 @@ export default function SettingsPage() {
   }
 
   const commitSettings = () => {
-    const newSettings = { apiProvider, apiBaseURL, apiKey, model, customPrompt, codeLanguage, opacity }
+    const newSettings = { apiProvider, apiBaseURL, apiKey, model, customPrompt, proxyUrl, codeLanguage, opacity }
     settingsStore.syncSettings(newSettings)
     window.api.updateAppSettings(getCloneableFields({ ...settingsStore, ...newSettings }))
   }
@@ -188,6 +190,31 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {/* Network / Proxy Settings */}
+        <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
+          <h2 className="text-lg font-semibold mb-4 flex items-center">
+            <Globe className="h-5 w-5 mr-2" />
+            网络设置
+          </h2>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                代理地址
+                <span className="ml-2 text-xs font-light">留空则跟随系统代理</span>
+              </label>
+              <input
+                type="text"
+                value={proxyUrl}
+                onChange={(e) => setProxyUrl(e.target.value)}
+                className="w-60 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="如 http://127.0.0.1:7890"
+              />
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
           <h2 className="text-lg font-semibold mb-4 flex items-center">
             <SquareTerminal className="h-5 w-5 mr-2" />

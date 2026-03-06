@@ -7,6 +7,7 @@ interface Settings {
   apiKey: string
   model: string
   customPrompt: string
+  proxyUrl: string
 
   theme: 'light' | 'dark'
   opacity: number
@@ -24,6 +25,7 @@ const defaultSettings: Settings = {
   apiKey: '',
   model: '',
   customPrompt: '',
+  proxyUrl: '',
   codeLanguage: '',
 
   theme: 'light',
@@ -43,7 +45,7 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'dreamcode-settings',
-      version: 5
+      version: 6
     }
   )
 )
