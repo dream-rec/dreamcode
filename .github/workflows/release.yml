@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*' # Trigger only on version tags like v1.0.0
+  workflow_dispatch:
 
 permissions:
   contents: write # required for creating releases & uploading assets
@@ -20,11 +21,11 @@ jobs:
             build_script: build:win
             artifact_name: electron-build-windows
           - name: macos-x64
-            runner: macos-13
+            runner: macos-15-intel
             build_script: build:mac
             artifact_name: electron-build-macos-x64
           - name: macos-arm64
-            runner: macos-14
+            runner: macos-15
             build_script: build:mac
             artifact_name: electron-build-macos-arm64
 
