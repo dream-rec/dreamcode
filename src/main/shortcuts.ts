@@ -375,6 +375,12 @@ const callbacks: Record<string, () => void> = {
     mainWindow.webContents.send('scroll-page-down')
   },
 
+  openMemoryCards: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('navigate-memory-cards')
+  },
+
   moveMainWindowUp: () => {
     const mainWindow = global.mainWindow
     if (!mainWindow || mainWindow.isDestroyed()) return

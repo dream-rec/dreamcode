@@ -113,6 +113,14 @@ const api = {
     ipcRenderer.removeAllListeners('scroll-page-down')
   },
 
+  // Navigate to memory cards page
+  onNavigateMemoryCards: (callback: () => void) => {
+    ipcRenderer.on('navigate-memory-cards', callback)
+  },
+  removeNavigateMemoryCardsListener: () => {
+    ipcRenderer.removeAllListeners('navigate-memory-cards')
+  },
+
   // AI loading events
   onAiLoadingStart: (callback: () => void) => {
     ipcRenderer.on('ai-loading-start', callback)

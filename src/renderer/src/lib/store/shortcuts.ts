@@ -58,6 +58,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
   },
   pageUp: { action: 'pageUp', key: 'CommandOrControl+J', category: 'Navigation' },
   pageDown: { action: 'pageDown', key: 'CommandOrControl+K', category: 'Navigation' },
+  openMemoryCards: {
+    action: 'openMemoryCards',
+    key: 'CommandOrControl+R',
+    category: 'Navigation'
+  },
   moveMainWindowUp: {
     action: 'moveMainWindowUp',
     key: 'CommandOrControl+Up',

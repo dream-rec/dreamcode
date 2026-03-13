@@ -319,7 +319,7 @@ export default function SettingsPage() {
             <Keyboard className="h-5 w-5 mr-2" />
             快捷键设置
             <div className="text-sm font-light ml-2 mt-1">
-              只有在主界面时，快捷键才有效。当前页面仅部分快捷键生效。
+              快捷键在问答页和记忆卡片页有效，当前页面仅部分快捷键生效。
             </div>
             <ResetDefaultShortcuts />
           </h2>

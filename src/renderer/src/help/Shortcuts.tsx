@@ -62,6 +62,7 @@ const getShortcutDescription = (action: string) => {
     stopSolutionStream: '停止生成',
     pageUp: '向上翻页',
     pageDown: '向下翻页',
+    openMemoryCards: '切换到记忆卡片页面',
     moveMainWindowUp: '向上移动窗口',
     moveMainWindowDown: '向下移动窗口',
     moveMainWindowLeft: '向左移动窗口',

@@ -1,4 +1,4 @@
-import { SettingsIcon, HelpCircle, Sun, Moon } from 'lucide-react'
+import { SettingsIcon, HelpCircle, Sun, Moon, IdCard } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store/app'
@@ -33,6 +33,14 @@ export function AppHeader() {
 
       {/* Right actions */}
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
+        <Button
+          variant="ghost"
+          className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+          onClick={() => navigate('/memory-cards')}
+          title="记忆卡片"
+        >
+          <IdCard className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"

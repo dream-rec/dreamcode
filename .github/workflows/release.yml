@@ -10,11 +10,23 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
 
     strategy:
       matrix:
-        os: [windows-latest, macos-latest]
+        include:
+          - name: windows
+            runner: windows-latest
+            build_script: build:win
+            artifact_name: electron-build-windows
+          - name: macos-x64
+            runner: macos-13
+            build_script: build:mac
+            artifact_name: electron-build-macos-x64
+          - name: macos-arm64
+            runner: macos-14
+            build_script: build:mac
+            artifact_name: electron-build-macos-arm64
 
     steps:
       - name: Checkout repository
@@ -29,14 +41,14 @@ jobs:
         run: npm ci
 
       - name: Package Electron app
-        run: npm run build:${{ matrix.os == 'windows-latest' && 'win' || (matrix.os == 'macos-latest' && 'mac' || 'linux') }}
+        run: npm run ${{ matrix.build_script }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: electron-build-${{ matrix.os }}
+          name: ${{ matrix.artifact_name }}
           path: dist/** # electron-builder output folder
 
   release:

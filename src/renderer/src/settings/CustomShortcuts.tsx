@@ -87,6 +87,7 @@ export function CustomShortcuts() {
           <h3 className="text-sm text-gray-500 dark:text-gray-400">页面导航</h3>
           <Shortcut label="向上翻页" shortcut="pageUp" />
           <Shortcut label="向下翻页" shortcut="pageDown" />
+          <Shortcut label="切换到记忆卡片页面" shortcut="openMemoryCards" />
         </div>
 
         {/* Window Movement */}

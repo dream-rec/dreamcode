@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route } from 'react-router'
+import { HashRouter, Routes, Route, useNavigate } from 'react-router'
 import { Toaster } from 'sonner'
 import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
 import HelpPage from '@/help'
+import MemoryCardsPage from '@/memory-cards'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { getCloneableFields } from '@/lib/utils'
@@ -64,14 +65,35 @@ export default function App() {
   return (
     <>
       <HashRouter>
+        <ShortcutNavigator />
         <Routes>
           <Route index element={<CoderPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="help" element={<HelpPage />} />
+          <Route path="memory-cards" element={<MemoryCardsPage />} />
         </Routes>
       </HashRouter>
 
       <Toaster />
     </>
   )
+}
+
+function ShortcutNavigator() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    window.api.onNavigateMemoryCards(() => {
+      if (window.location.hash.endsWith('/memory-cards')) {
+        navigate('/')
+      } else {
+        navigate('/memory-cards')
+      }
+    })
+    return () => {
+      window.api.removeNavigateMemoryCardsListener()
+    }
+  }, [navigate])
+
+  return null
 }
