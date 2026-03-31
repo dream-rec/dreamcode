@@ -5,6 +5,7 @@ interface Settings {
   apiProvider: 'openai' | 'anthropic'
   apiBaseURL: string
   apiKey: string
+  extraHeaders: string
   model: string
   customPrompt: string
   proxyUrl: string
@@ -24,6 +25,7 @@ const defaultSettings: Settings = {
   apiProvider: 'openai',
   apiBaseURL: '',
   apiKey: '',
+  extraHeaders: '',
   model: '',
   customPrompt: '',
   proxyUrl: '',

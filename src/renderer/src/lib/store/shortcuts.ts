@@ -118,7 +118,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
     }),
     {
       name: 'dreamcode-shortcuts',
-      version: 2,
+      version: 3,
       migrate: (state: unknown) => {
         if (!isPersistedShortcutsState(state) || !state.shortcuts) return state as ShortcutsStore
         // Merge in any new default shortcuts that are missing

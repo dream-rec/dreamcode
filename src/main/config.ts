@@ -6,6 +6,7 @@ export interface AppConfig {
   apiProvider: 'openai' | 'anthropic'
   apiBaseURL: string
   apiKey: string
+  extraHeaders: string
   model: string
   codeLanguage: string
   customPrompt: string
@@ -16,6 +17,7 @@ const defaultConfig: AppConfig = {
   apiProvider: 'openai',
   apiBaseURL: '',
   apiKey: '',
+  extraHeaders: '',
   model: '',
   codeLanguage: 'typescript',
   customPrompt: '',

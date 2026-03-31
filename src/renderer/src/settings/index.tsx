@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [apiProvider, setApiProvider] = useState(settingsStore.apiProvider)
   const [apiBaseURL, setApiBaseURL] = useState(settingsStore.apiBaseURL)
   const [apiKey, setApiKey] = useState(settingsStore.apiKey)
+  const [extraHeaders, setExtraHeaders] = useState(settingsStore.extraHeaders)
   const [model, setModel] = useState(settingsStore.model)
   const [customPrompt, setCustomPrompt] = useState(settingsStore.customPrompt)
   const [proxyUrl, setProxyUrl] = useState(settingsStore.proxyUrl)
@@ -60,7 +61,18 @@ export default function SettingsPage() {
   }
 
   const commitSettings = () => {
-    const newSettings = { apiProvider, apiBaseURL, apiKey, model, customPrompt, proxyUrl, codeLanguage, opacity, fontSize }
+    const newSettings = {
+      apiProvider,
+      apiBaseURL,
+      apiKey,
+      extraHeaders,
+      model,
+      customPrompt,
+      proxyUrl,
+      codeLanguage,
+      opacity,
+      fontSize
+    }
     settingsStore.syncSettings(newSettings)
     window.api.updateAppSettings(getCloneableFields({ ...settingsStore, ...newSettings }))
   }
@@ -172,6 +184,22 @@ export default function SettingsPage() {
                   {showApiKey ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </Button>
               </div>
+            </div>
+
+            <div className="flex items-start justify-between gap-4">
+              <label className="text-sm font-medium mt-2">
+                额外请求头
+                <span className="ml-2 text-xs font-light">
+                  JSON 对象，如 {'{"x-api-key":"你的key"}'}
+                </span>
+              </label>
+              <Textarea
+                value={extraHeaders}
+                onChange={(e) => setExtraHeaders(e.target.value)}
+                className="w-60 min-h-20 bg-white dark:bg-gray-700 dark:text-gray-200 font-mono text-xs"
+                placeholder='{"x-api-key":"your-key","x-project":"demo"}'
+                rows={3}
+              />
             </div>
 
             <div className="flex items-center justify-between">

@@ -18,6 +18,7 @@ ipcMain.handle('updateAppSettings', (_event, _settings) => {
     apiProvider: settings.apiProvider,
     apiBaseURL: settings.apiBaseURL,
     apiKey: settings.apiKey,
+    extraHeaders: settings.extraHeaders,
     model: settings.model,
     codeLanguage: settings.codeLanguage,
     customPrompt: settings.customPrompt,

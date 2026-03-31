@@ -27,13 +27,37 @@ function createProxyFetch(proxyUrl: string): typeof globalThis.fetch {
     undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch
 }
 
+function getExtraHeaders(rawHeaders: string): Record<string, string> | undefined {
+  if (!rawHeaders || !rawHeaders.trim()) return undefined
+
+  try {
+    const parsed = JSON.parse(rawHeaders)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined
+    }
+
+    const headers: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof key !== 'string' || !key.trim()) continue
+      if (value === null || value === undefined) continue
+      headers[key] = String(value)
+    }
+    return Object.keys(headers).length ? headers : undefined
+  } catch {
+    console.warn('Invalid extraHeaders JSON. Expected an object like {"x-api-key":"..."}.')
+    return undefined
+  }
+}
+
 function getModelProvider(_settings: AppSettings) {
   const proxyFetch = _settings.proxyUrl ? createProxyFetch(_settings.proxyUrl) : undefined
+  const headers = getExtraHeaders(_settings.extraHeaders)
 
   if (_settings.apiProvider === 'anthropic') {
     const anthropic = createAnthropic({
       baseURL: getAnthropicBaseURL(_settings.apiBaseURL) || undefined,
       apiKey: _settings.apiKey,
+      headers,
       fetch: proxyFetch
     })
     return anthropic(_settings.model)
@@ -41,6 +65,7 @@ function getModelProvider(_settings: AppSettings) {
   const openai = createOpenAI({
     baseURL: _settings.apiBaseURL || undefined,
     apiKey: _settings.apiKey,
+    headers,
     fetch: proxyFetch
   })
   return openai.chat(_settings.model)

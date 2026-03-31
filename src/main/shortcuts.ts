@@ -67,6 +67,118 @@ interface StreamContext {
   reason: AbortReason | null
 }
 
+class ThinkTagStreamFilter {
+  private carry = ''
+  private thinkDepth = 0
+
+  push(chunk: string): string {
+    const input = this.carry + chunk
+    this.carry = ''
+    return this.parse(input, false)
+  }
+
+  finish(): string {
+    if (!this.carry) return ''
+
+    const trailing = this.carry
+    this.carry = ''
+
+    // At stream end, keep normal trailing text, but suppress unfinished think tags.
+    if (this.looksLikePartialThinkTag(trailing)) {
+      return ''
+    }
+    if (this.thinkDepth > 0) {
+      return ''
+    }
+    return trailing
+  }
+
+  private parse(input: string, isFinal: boolean): string {
+    let output = ''
+    let i = 0
+
+    while (i < input.length) {
+      const ltIndex = input.indexOf('<', i)
+
+      if (this.thinkDepth === 0) {
+        if (ltIndex === -1) {
+          output += input.slice(i)
+          break
+        }
+
+        output += input.slice(i, ltIndex)
+        const tagResult = this.tryConsumeThinkTag(input, ltIndex, isFinal)
+        if (tagResult.kind === 'incomplete') {
+          this.carry = input.slice(ltIndex)
+          break
+        }
+        if (tagResult.kind === 'tag') {
+          this.thinkDepth += tagResult.opening ? 1 : this.thinkDepth > 0 ? -1 : 0
+          i = tagResult.nextIndex
+          continue
+        }
+
+        output += '<'
+        i = ltIndex + 1
+        continue
+      }
+
+      if (ltIndex === -1) {
+        break
+      }
+
+      const tagResult = this.tryConsumeThinkTag(input, ltIndex, isFinal)
+      if (tagResult.kind === 'incomplete') {
+        this.carry = input.slice(ltIndex)
+        break
+      }
+      if (tagResult.kind === 'tag') {
+        if (tagResult.opening) {
+          this.thinkDepth += 1
+        } else if (this.thinkDepth > 0) {
+          this.thinkDepth -= 1
+        }
+        i = tagResult.nextIndex
+        continue
+      }
+
+      i = ltIndex + 1
+    }
+
+    return output
+  }
+
+  private tryConsumeThinkTag(
+    input: string,
+    index: number,
+    isFinal: boolean
+  ):
+    | { kind: 'tag'; opening: boolean; nextIndex: number }
+    | { kind: 'incomplete' }
+    | { kind: 'none' } {
+    const closeIndex = input.indexOf('>', index)
+    if (closeIndex === -1) {
+      return isFinal ? { kind: 'none' } : { kind: 'incomplete' }
+    }
+
+    const rawTag = input.slice(index, closeIndex + 1)
+    const match = rawTag.match(/^<\s*(\/?)\s*(think|thinking)\b[^>]*>$/i)
+    if (!match) {
+      return { kind: 'none' }
+    }
+
+    return {
+      kind: 'tag',
+      opening: match[1] !== '/',
+      nextIndex: closeIndex + 1
+    }
+  }
+
+  private looksLikePartialThinkTag(text: string): boolean {
+    return /^<\s*\/?\s*think(?:ing)?[^>]*$/i.test(text)
+  }
+}
+
 let currentStreamContext: StreamContext | null = null
 
 // Conversation history tracking
@@ -174,6 +286,7 @@ const callbacks: Record<string, () => void> = {
       let endedNaturally = true
       let streamStarted = false
       let assistantResponse = ''
+      const filter = new ThinkTagStreamFilter()
       try {
         const solutionStream = getSolutionStream(screenshotData, streamContext.controller.signal)
         streamStarted = true
@@ -183,8 +296,16 @@ const callbacks: Record<string, () => void> = {
               endedNaturally = false
               break
             }
-            assistantResponse += chunk
-            mainWindow.webContents.send('solution-chunk', chunk)
+            const visibleChunk = filter.push(chunk)
+            if (!visibleChunk) continue
+            assistantResponse += visibleChunk
+            mainWindow.webContents.send('solution-chunk', visibleChunk)
+          }
+
+          const trailingChunk = filter.finish()
+          if (trailingChunk) {
+            assistantResponse += trailingChunk
+            mainWindow.webContents.send('solution-chunk', trailingChunk)
           }
         } catch (error) {
           if (!streamContext.controller.signal.aborted) {
@@ -288,6 +409,7 @@ const callbacks: Record<string, () => void> = {
       let endedNaturally = true
       let streamStarted = false
       let assistantResponse = ''
+      const filter = new ThinkTagStreamFilter()
       try {
         const solutionStream = getGeneralStream(
           conversationMessages,
@@ -300,8 +422,16 @@ const callbacks: Record<string, () => void> = {
               endedNaturally = false
               break
             }
-            assistantResponse += chunk
-            mainWindow.webContents.send('solution-chunk', chunk)
+            const visibleChunk = filter.push(chunk)
+            if (!visibleChunk) continue
+            assistantResponse += visibleChunk
+            mainWindow.webContents.send('solution-chunk', visibleChunk)
+          }
+
+          const trailingChunk = filter.finish()
+          if (trailingChunk) {
+            assistantResponse += trailingChunk
+            mainWindow.webContents.send('solution-chunk', trailingChunk)
           }
         } catch (error) {
           if (!streamContext.controller.signal.aborted) {
@@ -516,6 +646,7 @@ ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
   let endedNaturally = true
   let streamStarted = false
   let assistantResponse = ''
+  const filter = new ThinkTagStreamFilter()
 
   try {
     const followUpStream = getFollowUpStream(
@@ -531,8 +662,16 @@ ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
           endedNaturally = false
           break
         }
-        assistantResponse += chunk
-        mainWindow.webContents.send('solution-chunk', chunk)
+        const visibleChunk = filter.push(chunk)
+        if (!visibleChunk) continue
+        assistantResponse += visibleChunk
+        mainWindow.webContents.send('solution-chunk', visibleChunk)
+      }
+
+      const trailingChunk = filter.finish()
+      if (trailingChunk) {
+        assistantResponse += trailingChunk
+        mainWindow.webContents.send('solution-chunk', trailingChunk)
       }
     } catch (error) {
       if (!streamContext.controller.signal.aborted) {
