@@ -7,3 +7,4 @@ dist
 .env*
 nul
 .claude
+.trellis
