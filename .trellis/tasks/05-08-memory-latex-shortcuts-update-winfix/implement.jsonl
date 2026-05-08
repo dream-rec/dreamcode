@@ -1,5 +1,0 @@
-{"file": ".trellis/spec/frontend/ipc-electron.md", "reason": "IPC patterns, preload API structure, globalShortcut registration — needed for new shortcuts and window control IPC"}
-{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand store patterns — needed for extending shortcuts store with card-switching shortcuts"}
-{"file": ".trellis/spec/frontend/components.md", "reason": "Component conventions — needed for MarkdownRenderer LaTeX integration and About page UI"}
-{"file": ".trellis/spec/shared/code-quality.md", "reason": "Code quality standards for implementation"}
-{"file": ".trellis/tasks/05-08-memory-latex-shortcuts-update-winfix/prd.md", "reason": "Task requirements and decisions"}
