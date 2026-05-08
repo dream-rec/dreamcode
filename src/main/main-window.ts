@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { shell, app, BrowserWindow, ipcMain } from 'electron'
+import { shell, app, BrowserWindow, ipcMain, screen } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -18,7 +18,8 @@ export function createWindow(): void {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      zoomFactor: 1
     }
   })
 
@@ -33,6 +34,19 @@ export function createWindow(): void {
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
     app.dock?.show()
     mainWindow.setContentProtection(true)
+  })
+
+  // macOS: other apps entering/exiting fullscreen triggers display-metrics-changed,
+  // causing Chromium to recalculate backing scale factor in packaged builds.
+  // Delay reset to fire after Chromium's internal recalculation completes.
+  screen.on('display-metrics-changed', () => {
+    if (mainWindow.isDestroyed()) return
+    mainWindow.webContents.setZoomFactor(1)
+    setTimeout(() => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.setZoomFactor(1)
+      }
+    }, 100)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
