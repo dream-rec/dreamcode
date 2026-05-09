@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
+import rehypeSlug from 'rehype-slug'
 import 'highlight.js/styles/github-dark.css'
 import 'katex/dist/katex.min.css'
 import { useSettingsStore } from '@/lib/store/settings'
@@ -16,7 +17,44 @@ export default function MarkdownRenderer({ children }: { children: string }) {
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex, rehypeSlug]}
+        components={{
+          a({ href, children, ...props }) {
+            const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+              e.preventDefault()
+              if (!href) return
+              if (href.startsWith('#')) {
+                const id = decodeURIComponent(href.slice(1))
+                let target = document.getElementById(id)
+                if (!target) {
+                  const headings = e.currentTarget.closest('.prose')?.querySelectorAll(
+                    'h1, h2, h3, h4, h5, h6'
+                  )
+                  if (headings) {
+                    for (const h of headings) {
+                      const slug = (h.textContent || '')
+                        .toLowerCase()
+                        .replace(/[^\p{L}\p{M}\p{N}\p{Pc}\- ]/gu, '')
+                        .replace(/ /g, '-')
+                      if (slug === id) {
+                        target = h as HTMLElement
+                        break
+                      }
+                    }
+                  }
+                }
+                target?.scrollIntoView({ behavior: 'smooth' })
+              } else {
+                window.open(href, '_blank')
+              }
+            }
+            return (
+              <a href={href} onClick={handleClick} {...props}>
+                {children}
+              </a>
+            )
+          }
+        }}
       >
         {children}
       </ReactMarkdown>
