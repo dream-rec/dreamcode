@@ -1,7 +1,12 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
 import type { AppState } from '../main/state'
+
+// Lock renderer zoom to prevent scaling drift from display changes
+webFrame.setZoomFactor(1)
+webFrame.setZoomLevel(0)
+webFrame.setVisualZoomLevelLimits(1, 1)
 
 // Custom APIs for renderer
 const api = {

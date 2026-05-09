@@ -36,17 +36,23 @@ export function createWindow(): void {
     mainWindow.setContentProtection(true)
   })
 
-  // macOS: other apps entering/exiting fullscreen triggers display-metrics-changed,
-  // causing Chromium to recalculate backing scale factor in packaged builds.
-  // Delay reset to fire after Chromium's internal recalculation completes.
+  // macOS: other apps entering/exiting fullscreen triggers a display
+  // configuration change that corrupts the backing store scale of transparent
+  // windows in packaged builds. Force Chromium to recalculate by toggling
+  // window bounds, and lock zoom from both main and renderer sides.
   screen.on('display-metrics-changed', () => {
     if (mainWindow.isDestroyed()) return
+    const bounds = mainWindow.getBounds()
+    mainWindow.setBounds({ ...bounds, width: bounds.width + 1 })
+    mainWindow.setBounds(bounds)
     mainWindow.webContents.setZoomFactor(1)
+    mainWindow.webContents.setZoomLevel(0)
     setTimeout(() => {
-      if (!mainWindow.isDestroyed()) {
-        mainWindow.webContents.setZoomFactor(1)
-      }
-    }, 100)
+      if (mainWindow.isDestroyed()) return
+      mainWindow.webContents.setZoomFactor(1)
+      mainWindow.webContents.setZoomLevel(0)
+      mainWindow.webContents.invalidate()
+    }, 150)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
