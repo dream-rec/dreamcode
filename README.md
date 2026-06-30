@@ -113,6 +113,16 @@ npm run dev
 
 您可以自由使用、复制、修改本项目代码，但 **禁止任何形式的商业用途**。
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=dream-rec%2Fdreamcode&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=dream-rec/dreamcode&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=dream-rec/dreamcode&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=dream-rec/dreamcode&type=date&legend=top-left" />
+ </picture>
+</a>
+
 
 ## 致谢
 
