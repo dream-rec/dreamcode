@@ -11,12 +11,10 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
   <img alt="TypeScript 5.8" src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white">
   <img alt="Vite 7" src="https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white">
-  <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white">
-  <img alt="shadcn/ui" src="https://img.shields.io/badge/shadcn%2Fui-latest-000000?logo=shadcnui&logoColor=white">
-  <img alt="Zustand 5" src="https://img.shields.io/badge/Zustand-5-443E38?logo=react&logoColor=white">
-  <img alt="Vercel AI SDK 5" src="https://img.shields.io/badge/Vercel_AI_SDK-5-000000?logo=vercel&logoColor=white">
   <img alt="License CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC_BY--NC_4.0-EF9421?logo=creativecommons&logoColor=white">
 </p>
+
+<p align="center">English: <a href="README_EN.md">README_EN.md</a></p>
 
 <p align="center">基于 <a href="https://github.com/ooboqoo/interview-coder-cn">interview-coder-cn</a> 二次开发</p>
 
