@@ -145,3 +145,4 @@ npm run build:mac    # 或 build:win / build:linux
 
 - 原项目 [interview-coder-cn](https://github.com/ooboqoo/interview-coder-cn) by Gavin Wang
 - 灵感来源 [Interview-Coder](https://github.com/ibttf/interview-coder)
+- 学AI，上L站。Ref: https://linux.do/
