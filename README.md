@@ -1,35 +1,111 @@
-# DreamCode
+<p align="center">
+  <img src="resources/favor.png" width="112" alt="dreamcode logo">
+</p>
 
-![dc](resources/fav.png)
+<h1 align="center">DreamCode</h1>
 
-AI 驱动的编码面试助手，支持实时截屏分析、隐身窗口、深色模式，适配国内 AI 生态。
+<p align="center"><strong>AI 编码面试助手：一键截屏、实时解题、屏幕共享隐身。</strong></p>
 
-> 本项目基于 [interview-coder-cn](https://github.com/ooboqoo/interview-coder-cn) 二次开发。
+<p align="center">
+  <img alt="Electron 37" src="https://img.shields.io/badge/Electron-37-47848F?logo=electron&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="TypeScript 5.8" src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white">
+  <img alt="Vite 7" src="https://img.shields.io/badge/Vite-7-646CFF?logo=vite&logoColor=white">
+  <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white">
+  <img alt="shadcn/ui" src="https://img.shields.io/badge/shadcn%2Fui-latest-000000?logo=shadcnui&logoColor=white">
+  <img alt="Zustand 5" src="https://img.shields.io/badge/Zustand-5-443E38?logo=react&logoColor=white">
+  <img alt="Vercel AI SDK 5" src="https://img.shields.io/badge/Vercel_AI_SDK-5-000000?logo=vercel&logoColor=white">
+  <img alt="License CC BY-NC 4.0" src="https://img.shields.io/badge/License-CC_BY--NC_4.0-EF9421?logo=creativecommons&logoColor=white">
+</p>
 
-## 项目简介
+<p align="center">基于 <a href="https://github.com/ooboqoo/interview-coder-cn">interview-coder-cn</a> 二次开发</p>
 
-DreamCode 是一个面向中文用户的编码面试辅助工具，通过快捷键截取屏幕内容发送给 AI 大模型进行分析，实时给出解题思路和代码。窗口具备隐身能力，在屏幕共享时不会被发现。
+---
 
-### 适用场景
+## 核心优势
 
-- 编程面试：分析屏幕上的题目，实时给出解题思路和代码，即便面试官要求分享屏幕也不会被发现
-- 笔试题目：不会导致笔试网页失焦，可规避"跳出网页"检测
-- 其他场景（如英语机试等）：可通过"自定义提示词"功能自行扩展
+- **屏幕共享隐身**：窗口开启内容保护，腾讯会议等主流会议软件录制/共享时不可见
+- **不抢焦点**：截屏与操作全走全局快捷键，笔试网页不失焦，规避「跳出页面」检测
+- **双协议接入**：同时支持 OpenAI 兼容格式与 Claude (Anthropic) 原生 API，设置页一键切换
+- **模型自填**：不锁死模型列表，任意服务商任意模型名手动输入即可
+- **记忆卡片**：常用提示、模板、八股文预存为卡片（支持markdown\latex），快捷键直接调出
+- **全程本地**：API Key 与配置只落本地配置文件，不依赖 `.env`，不上传任何服务
 
-### 使用界面
+---
 
-<p align="center">主页面</p>
+## 效果展示
 
-![portal](screenshot/portal.png)
-
-<p align="center">设置页</p>
-
-![settings](screenshot/settings.png)
+| 主页面 | 设置页 |
+| --- | --- |
+| ![portal](screenshot/portal.png) | ![settings](screenshot/settings.png) |
 
 ### 对话效果
 
 ![chat](screenshot/chat.png)
 
+---
+
+## 桌面版下载
+
+不想装 Node 环境的话，直接下 [Releases](https://github.com/dream-rec/dreamcode/releases)。
+
+| 文件 | 平台 |
+| --- | --- |
+| `dreamcode-*-setup.exe` | Windows 安装版（创建桌面快捷方式） |
+| `dreamcode-*-portable.exe` | Windows 便携版（免安装） |
+| `dreamcode-*-x64-mac.dmg` | macOS Intel |
+| `dreamcode-*-arm64-mac.dmg` | macOS Apple Silicon |
+
+### 首次打开
+
+安装包**未做代码签名**，系统会拦一次：
+
+- **macOS**：提示「无法验证开发者」。右键点 App → 选「打开」→ 再点一次「打开」。只需操作一次。
+- **Windows**：SmartScreen 提示「已保护你的电脑」。点「更多信息」→「仍要运行」。
+
+macOS 还需在「系统设置 → 隐私与安全性 → 屏幕录制」中授权 DreamCode，否则截屏为空。
+
+---
+
+## 本地启动
+
+依赖 Node.js 环境，未安装请先 [下载安装](https://nodejs.org/zh-cn/download)。
+
+```bash
+npm install
+npm run dev
+```
+
+打包：
+
+```bash
+npm run build:mac    # 或 build:win / build:linux
+```
+
+---
+
+## 使用
+
+1. **设置**：填 API 类型 / Base URL / API Key / Model，选解题语言，需要时配代理，点保存（必须显式保存才生效）
+2. **截屏**：快捷键截取屏幕题目，可多张叠加
+3. **解题**：快捷键发送给模型，正文流式返回思路与代码
+4. **记忆卡片**：预存常用提示与模板，快捷键直接调出
+
+支持的服务商：[硅基流动](https://cloud.siliconflow.cn/i/SG8C0772)、[OpenRouter](https://openrouter.ai/)、OpenAI 官方、Anthropic 官方等，任何 OpenAI 兼容网关均可。
+
+快捷键全部可在设置页自定义，状态栏提示会同步跟随。
+
+---
+
+## 适用场景
+
+- **编程面试**：分析屏幕上的题目，实时给出思路与代码，面试官共享屏幕也看不到
+- **笔试题目**：不导致网页失焦，规避跳出检测
+- **其他机试**：通过「自定义提示词」自行扩展，如英语机试、八股问答等
+
+> 隐身能力适配市面大部分会议软件，但少部分软件与浏览器可能失效。使用前请自行测试，本项目不承担任何责任。
+
+---
 
 ## 更新日志
 
@@ -37,81 +113,23 @@ DreamCode 是一个面向中文用户的编码面试辅助工具，通过快捷�
 
 - 添加 slug，能正确定位目标
 
-## 项目特色
+### v1.2.x 累计
 
-### 新增功能
+- **多类型 API 兼容**：OpenAI 兼容格式与 Claude 原生 API 一键切换
+- **深浅色切换**：标题栏太阳/月亮按钮，全局适配深色主题
+- **UI 美化**：圆角窗口、macOS 风格交通灯按钮、毛玻璃效果
+- **配置持久化**：设置写入本地配置文件，移除 `.env` 依赖
+- 修复模型显示空白、底部状态栏遮挡内容、快捷键提示不同步等问题
 
-- **多类型 API 兼容**：同时支持 OpenAI 兼容格式和 Claude (Anthropic) 原生 API，设置界面一键切换
-- **深浅色切换**：标题栏提供太阳/月亮切换按钮，全局适配深色主题
-- **UI 界面美化**：圆角窗口、macOS 风格交通灯按钮、毛玻璃效果
-- **配置持久化与显式保存**：设置保存到本地配置文件，移除 `.env` 依赖；设置页面必须点击保存才生效
-
-### 修复的 Bug
-
-- **模型显示问题**：修复窗口自定义模型空白显示，去除硬编码模型列表，全部改为自定义输入
-- **内容遮挡与快捷键不同步**：修复底部状态栏遮挡内容、快捷键提示未跟随用户自定义设置的问题
-
-
-## 如何使用
-
-### 直接下载安装包
-
-前往 [Releases](https://github.com/dream-rec/dreamcode/releases) 页面下载：
-
-| 文件 | 平台 | 说明 |
-|------|------|------|
-| `dreamcode-*-setup.exe` | Windows | 安装版，自动创建桌面快捷方式 |
-| `dreamcode-*-portable.exe` | Windows | 便携版，免安装直接运行 |
-| `dreamcode-*-x64-mac.dmg` | macOS (Intel) | 适用于 x64 (Intel) 芯片 |
-| `dreamcode-*-arm64-mac.dmg` | macOS (Apple Silicon) | 适用于 M 系列芯片 |
-
-### 从源码构建
-
-#### 1. 安装依赖
-
-项目运行依赖 Node.js 环境，如未安装请先 [下载安装](https://nodejs.org/zh-cn/download)。
-
-```bash
-npm install
-```
-
-#### 2. 启动开发模式
-
-```bash
-npm run dev
-```
-
-### 配置 API
-
-启动后在设置页面配置：
-
-1. **API 类型**：选择 OpenAI 兼容 或 Claude
-2. **API Base URL**：填写服务商地址（留空使用默认）
-3. **API Key**：填写你的 API Key
-4. **Model**：填写模型名称
-
-支持的服务商：[硅基流动](https://cloud.siliconflow.cn/i/SG8C0772)、[OpenRouter](https://openrouter.ai/)、OpenAI 官方、Anthropic 官方等。
-
-
-## 关于隐身能力
-
-隐身功能适配市面上大部分会议软件（如腾讯会议等），但少部分软件和浏览器可能无法正常隐身。使用前请自行测试，本项目不承担任何责任。
-
-
-## 技术栈
-
-- Electron 37 + React 19 + TypeScript 5.8
-- Vite 7 (via electron-vite 4)
-- Tailwind CSS 4 + shadcn/ui
-- Zustand 5 (状态管理)
-- Vercel AI SDK (`ai` + `@ai-sdk/openai` + `@ai-sdk/anthropic`)
-
+---
 
 ## 许可协议
 
 本项目采用 **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)** 协议许可。
 
-您可以自由使用、复制、修改本项目代码，但 **禁止任何形式的商业用途**。
+可自由使用、复制、修改本项目代码，但**禁止任何形式的商业用途**。
+
+---
 
 ## Star History
 
@@ -123,6 +141,7 @@ npm run dev
  </picture>
 </a>
 
+---
 
 ## 致谢
 
