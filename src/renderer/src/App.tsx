@@ -88,7 +88,7 @@ function ShortcutNavigator() {
     window.api.onNavigateMemoryCard((index: number) => {
       if (index < cards.length) {
         selectCard(cards[index].id)
-        navigate('/memory-cards')
+        navigate('/memory-cards', { state: { cardId: cards[index].id } })
       }
     })
     return () => {

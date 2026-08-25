@@ -31,13 +31,17 @@
 
 ---
 
-## 效果展示
+## 页面展示
 
-| 主页面 | 设置页 |
+| 欢迎页 | 设置页 |
 | --- | --- |
-| ![portal](screenshot/portal.png) | ![settings](screenshot/settings.png) |
+| ![portal](screenshot/welcome.png) | ![settings](screenshot/settings.png) |
 
-### 对话效果
+| 对话窗口 | 知识卡片 |
+| --- | --- |
+| ![portal](screenshot/main.png) | ![settings](screenshot/card.png) |
+
+### 使用案例
 
 ![chat](screenshot/chat.png)
 
@@ -107,17 +111,10 @@ npm run build:mac    # 或 build:win / build:linux
 
 ## 更新日志
 
-### v1.2.4
+### v1.2.5
 
-- 添加 slug，能正确定位目标
-
-### v1.2.x 累计
-
-- **多类型 API 兼容**：OpenAI 兼容格式与 Claude 原生 API 一键切换
-- **深浅色切换**：标题栏太阳/月亮按钮，全局适配深色主题
-- **UI 美化**：圆角窗口、macOS 风格交通灯按钮、毛玻璃效果
-- **配置持久化**：设置写入本地配置文件，移除 `.env` 依赖
-- 修复模型显示空白、底部状态栏遮挡内容、快捷键提示不同步等问题
+- 修复记忆卡片快捷键跳转逻辑修复；
+- 记忆卡片标题合法空类型。
 
 ---
 

@@ -33,11 +33,15 @@
 
 ## Gallery
 
-| Main window | Settings |
+| Welcome | Settings |
 | --- | --- |
-| ![portal](screenshot/portal.png) | ![settings](screenshot/settings.png) |
+| ![welcome](screenshot/welcome.png) | ![settings](screenshot/settings.png) |
 
-### Chat
+| Chat window | Memory cards |
+| --- | --- |
+| ![chat window](screenshot/main.png) | ![memory cards](screenshot/card.png) |
+
+### Example
 
 ![chat](screenshot/chat.png)
 
@@ -107,17 +111,10 @@ Every shortcut is remappable in settings, and the status-bar hints follow your b
 
 ## Changelog
 
-### v1.2.4
+### v1.2.5
 
-- Added slugs so links resolve to the right target
-
-### v1.2.x cumulative
-
-- **Two API protocols** — one-click switch between OpenAI-compatible and Claude native
-- **Light / dark toggle** — sun/moon button in the title bar, dark theme applied throughout
-- **UI polish** — rounded window, macOS-style traffic lights, frosted glass
-- **Persistent config** — settings written to a local config file, `.env` dependency removed
-- Fixed blank model display, status bar covering content, and shortcut hints not tracking custom bindings
+- Fixed memory-card shortcut navigation logic
+- Memory-card titles may be empty
 
 ---
 

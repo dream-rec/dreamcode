@@ -104,8 +104,7 @@ export const useMemoryCardsStore = create<MemoryCardsStore>()(
 
           const cards = state.cards.filter((card) => card.id !== cardId)
           const fallbackId = cards[0].id
-          const selectedCardId =
-            state.selectedCardId === cardId ? fallbackId : state.selectedCardId
+          const selectedCardId = state.selectedCardId === cardId ? fallbackId : state.selectedCardId
           const defaultCardId = state.defaultCardId === cardId ? fallbackId : state.defaultCardId
           return { cards, selectedCardId, defaultCardId }
         })
@@ -128,9 +127,7 @@ export const useMemoryCardsStore = create<MemoryCardsStore>()(
       },
       updateCardTitle: (cardId, title) => {
         set((state) => ({
-          cards: state.cards.map((card) =>
-            card.id === cardId ? { ...card, title: title || '未命名卡片' } : card
-          )
+          cards: state.cards.map((card) => (card.id === cardId ? { ...card, title } : card))
         }))
       },
       updateCardContent: (cardId, content) => {
@@ -162,13 +159,21 @@ export const useMemoryCardsStore = create<MemoryCardsStore>()(
         }
 
         const next = state as PersistedState
-        const cards = Array.isArray(next.cards) && next.cards.length > 0 ? next.cards : [defaultCard]
+        const cards =
+          Array.isArray(next.cards) && next.cards.length > 0
+            ? next.cards.map((card) => ({
+                ...card,
+                title: typeof card.title === 'string' ? card.title : ''
+              }))
+            : [defaultCard]
         const selectedCardId =
-          typeof next.selectedCardId === 'string' && cards.some((card) => card.id === next.selectedCardId)
+          typeof next.selectedCardId === 'string' &&
+          cards.some((card) => card.id === next.selectedCardId)
             ? next.selectedCardId
             : cards[0].id
         const defaultCardId =
-          typeof next.defaultCardId === 'string' && cards.some((card) => card.id === next.defaultCardId)
+          typeof next.defaultCardId === 'string' &&
+          cards.some((card) => card.id === next.defaultCardId)
             ? next.defaultCardId
             : cards[0].id
 

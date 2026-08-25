@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { ArrowLeft, BookOpen, Pencil, LayoutGrid, Plus, Trash2, Star, GripVertical } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router'
+import {
+  ArrowLeft,
+  BookOpen,
+  Pencil,
+  LayoutGrid,
+  Plus,
+  Trash2,
+  Star,
+  GripVertical
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -18,6 +27,9 @@ const SCROLL_OFFSET = 120
 
 export default function MemoryCardsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const locationState = location.state as { cardId?: unknown } | null
+  const requestedCardId = typeof locationState?.cardId === 'string' ? locationState.cardId : null
   const {
     cards,
     selectedCardId,
@@ -73,11 +85,18 @@ export default function MemoryCardsPage() {
 
   useEffect(() => {
     window.api.updateAppState({ inCoderPage: true })
-    openDefaultCard()
     return () => {
       window.api.updateAppState({ inCoderPage: false })
     }
-  }, [openDefaultCard])
+  }, [])
+
+  useEffect(() => {
+    if (requestedCardId) {
+      selectCard(requestedCardId)
+    } else {
+      openDefaultCard()
+    }
+  }, [requestedCardId, selectCard, openDefaultCard])
 
   useEffect(() => {
     const handleOpenDefaultCard = () => {
@@ -328,7 +347,9 @@ export default function MemoryCardsPage() {
                 )}
               </>
             ) : (
-              <div className="text-sm text-gray-500 dark:text-gray-400">暂无可用卡片，请先新建卡片。</div>
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                暂无可用卡片，请先新建卡片。
+              </div>
             )}
           </main>
         </div>
@@ -360,9 +381,7 @@ export default function MemoryCardsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>删除卡片</DialogTitle>
-            <DialogDescription>
-              删除后无法恢复，确认删除当前卡片吗？
-            </DialogDescription>
+            <DialogDescription>删除后无法恢复，确认删除当前卡片吗？</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>

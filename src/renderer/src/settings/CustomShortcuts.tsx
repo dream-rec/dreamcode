@@ -100,7 +100,7 @@ export function CustomShortcuts() {
           {cards.slice(0, 9).map((card, index) => (
             <Shortcut
               key={card.id}
-              label={card.title || `卡片 ${index + 1}`}
+              label={`记忆卡片${index + 1}`}
               shortcut={`switchToCard${index + 1}`}
             />
           ))}
