@@ -13,7 +13,15 @@ export default defineConfig({
           {
             src: 'src/main/prompts.md',
             dest: '.'
-          }
+          },
+          ...(process.platform === 'darwin'
+            ? [
+                {
+                  src: 'resources/bin/capture-below',
+                  dest: 'bin'
+                }
+              ]
+            : [])
         ]
       })
     ]

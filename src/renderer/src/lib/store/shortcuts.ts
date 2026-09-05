@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { isMac } from '@/lib/utils/env'
 
 export type Shortcut = {
   action: string
@@ -33,6 +34,9 @@ type PersistedShortcutsState = {
 function isPersistedShortcutsState(value: unknown): value is PersistedShortcutsState {
   return typeof value === 'object' && value !== null && 'shortcuts' in value
 }
+
+const platformGroupModifier = isMac ? 'CommandOrControl' : 'Alt'
+const promptGroupKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=']
 
 const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
   hideOrShowMainWindow: {
@@ -91,8 +95,36 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     action: 'moveMainWindowRight',
     key: 'CommandOrControl+Right',
     category: 'Window Movement'
-  }
-}
+  },
+  ...Object.fromEntries(
+    Array.from({ length: 12 }, (_, index) => {
+      const slot = index + 1
+      const key = `${platformGroupModifier}+F${slot}`
+      return [
+        `switchToProviderGroup${slot}`,
+        {
+          action: `switchToProviderGroup${slot}`,
+          key,
+          category: 'Provider 组'
+        }
+      ]
+    })
+  ),
+  ...Object.fromEntries(
+    Array.from({ length: 12 }, (_, index) => {
+      const slot = index + 1
+      const key = `${platformGroupModifier}+Shift+${promptGroupKeys[index]}`
+      return [
+        `switchToPromptGroup${slot}`,
+        {
+          action: `switchToPromptGroup${slot}`,
+          key,
+          category: 'Prompt 组'
+        }
+      ]
+    })
+  )
+} as Record<string, Omit<Shortcut, 'defaultKey'>>
 
 export const useShortcutsStore = create<ShortcutsStore>()(
   persist(
@@ -127,7 +159,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
     }),
     {
       name: 'dreamcode-shortcuts',
-      version: 4,
+      version: 5,
       migrate: (state: unknown) => {
         if (!isPersistedShortcutsState(state) || !state.shortcuts) return state as ShortcutsStore
         // Merge in any new default shortcuts that are missing

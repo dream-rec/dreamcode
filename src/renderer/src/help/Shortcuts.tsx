@@ -15,6 +15,8 @@ export function Shortcuts() {
       <ShortcutItemGroup category="Navigation" />
       <ShortcutItemGroup category="Memory Cards" />
       <ShortcutItemGroup category="Window Movement" />
+      <ShortcutItemGroup category="Provider 组" />
+      <ShortcutItemGroup category="Prompt 组" />
     </HelpSection>
   )
 }
@@ -50,7 +52,9 @@ const getCategoryName = (category: string) => {
     'Screenshot & AI': '截图与AI',
     Navigation: '页面导航',
     'Memory Cards': '记忆卡片',
-    'Window Movement': '窗口移动'
+    'Window Movement': '窗口移动',
+    'Provider 组': 'Provider 组切换（Command/Alt + F1~F12）',
+    'Prompt 组': 'Prompt 组切换（Command/Alt + Shift + 数字键）'
   }
   return categoryMap[category] || category
 }
@@ -79,5 +83,9 @@ const getShortcutDescription = (action: string) => {
     moveMainWindowLeft: '向左移动窗口',
     moveMainWindowRight: '向右移动窗口'
   }
+  const providerMatch = action.match(/^switchToProviderGroup(\d+)$/)
+  if (providerMatch) return `切换到 Provider 组 ${providerMatch[1]}`
+  const promptMatch = action.match(/^switchToPromptGroup(\d+)$/)
+  if (promptMatch) return `切换到 Prompt 组 ${promptMatch[1]}`
   return descriptionMap[action] || action
 }

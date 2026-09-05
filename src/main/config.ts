@@ -1,30 +1,9 @@
 import { app } from 'electron'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { defaultConfig, normalizeConfig, type AppConfig } from '../shared/settings'
 
-export interface AppConfig {
-  apiProvider: 'openai' | 'anthropic'
-  apiBaseURL: string
-  apiKey: string
-  extraHeaders: string
-  model: string
-  codeLanguage: string
-  customPrompt: string
-  proxyUrl: string
-  autoCheckUpdate: boolean
-}
-
-const defaultConfig: AppConfig = {
-  apiProvider: 'openai',
-  apiBaseURL: '',
-  apiKey: '',
-  extraHeaders: '',
-  model: '',
-  codeLanguage: 'typescript',
-  customPrompt: '',
-  proxyUrl: '',
-  autoCheckUpdate: true
-}
+export type { AppConfig } from '../shared/settings'
 
 function getConfigPath(): string {
   return join(app.getPath('userData'), 'config.json')
@@ -38,7 +17,7 @@ export function loadConfig(): AppConfig {
   try {
     const raw = readFileSync(configPath, 'utf-8')
     const saved = JSON.parse(raw)
-    return { ...defaultConfig, ...saved }
+    return normalizeConfig(saved)
   } catch {
     return { ...defaultConfig }
   }

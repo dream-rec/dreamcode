@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Eye, EyeOff } from 'lucide-react'
 import { useSettingsStore } from '@/lib/store/settings'
@@ -11,6 +11,12 @@ export function PrerequisitesChecker() {
   const [inputApiBaseURL, setInputApiBaseURL] = useState(apiBaseURL)
   const [inputProvider, setInputProvider] = useState(apiProvider)
   const [showApiKey, setShowApiKey] = useState(false)
+
+  useEffect(() => {
+    setInputApiKey(apiKey)
+    setInputApiBaseURL(apiBaseURL)
+    setInputProvider(apiProvider)
+  }, [apiKey, apiBaseURL, apiProvider])
 
   const saveApiKey = () => {
     updateSetting('apiProvider', inputProvider)
@@ -55,7 +61,9 @@ export function PrerequisitesChecker() {
 
         <div className="space-y-2 my-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API 类型</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              API 类型
+            </label>
             <div className="flex rounded-md overflow-hidden border border-gray-300 dark:border-gray-600">
               <button
                 className={`flex-1 py-2 text-sm font-medium transition-colors ${
@@ -103,7 +111,9 @@ export function PrerequisitesChecker() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              API Key
+            </label>
             <div className="flex">
               <input
                 type={showApiKey ? 'text' : 'password'}

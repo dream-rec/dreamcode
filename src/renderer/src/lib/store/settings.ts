@@ -1,5 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { defaultConfig, type ProviderGroup, type PromptGroup } from '../../../../shared/settings'
+
+export type { ProviderGroup, PromptGroup }
 
 interface Settings {
   apiProvider: 'openai' | 'anthropic'
@@ -15,6 +18,10 @@ interface Settings {
   fontSize: number
   codeLanguage: string
   autoCheckUpdate: boolean
+  providerGroups: ProviderGroup[]
+  promptGroups: PromptGroup[]
+  activeProviderGroupId: string
+  activePromptGroupId: string
 }
 
 interface SettingsStore extends Settings {
@@ -30,12 +37,16 @@ const defaultSettings: Settings = {
   model: '',
   customPrompt: '',
   proxyUrl: '',
-  codeLanguage: '',
 
   theme: 'light',
   opacity: 0.8,
   fontSize: 14,
-  autoCheckUpdate: true
+  codeLanguage: 'typescript',
+  autoCheckUpdate: true,
+  providerGroups: defaultConfig.providerGroups.map((group) => ({ ...group })),
+  promptGroups: defaultConfig.promptGroups.map((group) => ({ ...group })),
+  activeProviderGroupId: defaultConfig.activeProviderGroupId,
+  activePromptGroupId: defaultConfig.activePromptGroupId
 }
 
 export const useSettingsStore = create<SettingsStore>()(

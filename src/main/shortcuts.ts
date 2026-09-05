@@ -4,7 +4,7 @@ import type { ModelMessage } from 'ai'
 import { takeScreenshot } from './take-screenshot'
 import { getSolutionStream, getFollowUpStream, getGeneralStream } from './ai'
 import { state } from './state'
-import { settings } from './settings'
+import { activatePromptGroupAt, activateProviderGroupAt, settings } from './settings'
 
 /**
  * Extract meaningful error message from API errors
@@ -362,7 +362,7 @@ const callbacks: Record<string, () => void> = {
 
     // Fallback to first screenshot if no conversation
     if (conversationMessages.length === 0) {
-      callbacks.takeScreenshot()
+      await callbacks.takeScreenshot()
       return
     }
 
@@ -592,6 +592,15 @@ const callbacks: Record<string, () => void> = {
   }
 }
 
+for (let index = 0; index < 12; index += 1) {
+  callbacks[`switchToProviderGroup${index + 1}`] = () => {
+    activateProviderGroupAt(index)
+  }
+  callbacks[`switchToPromptGroup${index + 1}`] = () => {
+    activatePromptGroupAt(index)
+  }
+}
+
 function unregisterShortcut(action: string) {
   const shortcut = shortcuts[action]
   if (!shortcut) return
@@ -606,9 +615,9 @@ function unregisterShortcut(action: string) {
   shortcut.registeredKeys = []
 }
 
-function getShortcutRegistrationKeys(key: string) {
+function getShortcutRegistrationKeys(key: string, includeWindowsAlias = true) {
   const keys = [key]
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || !includeWindowsAlias) {
     return keys
   }
   const parts = key.split('+')
@@ -629,14 +638,23 @@ function getShortcutRegistrationKeys(key: string) {
 }
 
 function registerShortcut(action: string, key: string) {
+  const callback = callbacks[action]
+  if (!callback) return
+  const runCallback = () => {
+    Promise.resolve(callback()).catch((error) => {
+      console.error(`Error running shortcut "${action}":`, error)
+    })
+  }
+
   if (shortcuts[action]) {
     unregisterShortcut(action)
   }
 
-  const keysToRegister = getShortcutRegistrationKeys(key)
+  const isGroupShortcut = /^switchTo(?:Provider|Prompt)Group\d+$/.test(action)
+  const keysToRegister = getShortcutRegistrationKeys(key, !isGroupShortcut)
   const registeredKeys: string[] = []
   keysToRegister.forEach((shortcutKey) => {
-    if (globalShortcut.register(shortcutKey, callbacks[action])) {
+    if (globalShortcut.register(shortcutKey, runCallback)) {
       registeredKeys.push(shortcutKey)
     }
   })

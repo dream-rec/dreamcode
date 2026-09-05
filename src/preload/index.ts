@@ -25,6 +25,24 @@ const api = {
   // Update app settings
   updateAppSettings: (settings: Partial<AppSettings>) =>
     ipcRenderer.invoke('updateAppSettings', settings),
+  onAppSettingsChanged: (callback: (settings: AppSettings) => void) => {
+    ipcRenderer.on('app-settings-changed', (_event, settings) => {
+      callback(settings)
+    })
+  },
+  removeAppSettingsChangedListener: () => {
+    ipcRenderer.removeAllListeners('app-settings-changed')
+  },
+  activateProviderGroup: (id: string) => ipcRenderer.invoke('activateProviderGroup', id),
+  activatePromptGroup: (id: string) => ipcRenderer.invoke('activatePromptGroup', id),
+  onGroupSwitched: (callback: (message: string) => void) => {
+    ipcRenderer.on('group-switched', (_event, message) => {
+      callback(message)
+    })
+  },
+  removeGroupSwitchedListener: () => {
+    ipcRenderer.removeAllListeners('group-switched')
+  },
 
   // Update app state
   updateAppState: (state: Partial<AppState>) => ipcRenderer.invoke('updateAppState', state),

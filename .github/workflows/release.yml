@@ -41,6 +41,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build macOS screenshot helper
+        if: startsWith(matrix.name, 'macos-')
+        run: |
+          xcrun --sdk macosx clang -Os -arch "$(uname -m)" -mmacosx-version-min=10.15 \
+            scripts/capture-below.c \
+            -framework ApplicationServices \
+            -framework ImageIO \
+            -framework CoreServices \
+            -o resources/bin/capture-below
+
       - name: Package Electron app
         run: npm run ${{ matrix.build_script }}
         env:

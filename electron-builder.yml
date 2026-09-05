@@ -9,6 +9,8 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!resources/bin/**'
+  - '!out/main/bin/**'
 asarUnpack:
   - resources/**
 win:
@@ -25,6 +27,11 @@ portable:
   artifactName: ${name}-${version}-portable.${ext}
 mac:
   artifactName: ${name}-${version}-${arch}-mac.${ext}
+  extraResources:
+    - from: resources/bin
+      to: bin
+      filter:
+        - '**/*'
   entitlementsInherit: build/entitlements.mac.plist
   publish: null
   extendInfo:

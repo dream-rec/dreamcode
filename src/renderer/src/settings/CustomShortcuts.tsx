@@ -5,6 +5,7 @@ import ShortcutRenderer from '@/components/ShortcutRenderer'
 import { isModifierKey, getShortcutAccelerator } from '@/lib/utils/keyboard'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useMemoryCardsStore } from '@/lib/store/memory-cards'
+import { useSettingsStore } from '@/lib/store/settings'
 
 const ShortcutsContext = createContext<{
   recordingAction: string | null
@@ -17,6 +18,7 @@ const ShortcutsContext = createContext<{
 export function CustomShortcuts() {
   const { shortcuts, updateShortcut } = useShortcutsStore()
   const { cards } = useMemoryCardsStore()
+  const { providerGroups, promptGroups } = useSettingsStore()
   const [recordingAction, setRecordingAction] = useState<string | null>(null)
 
   const onShortcutChange = useCallback(
@@ -81,6 +83,28 @@ export function CustomShortcuts() {
             shortcut="appendScreenshot"
           />
           <Shortcut label="停止生成" shortcut="stopSolutionStream" />
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm text-gray-500 dark:text-gray-400">Provider 组切换</h3>
+          {providerGroups.map((group, index) => (
+            <Shortcut
+              key={group.id}
+              label={group.name || `Provider 组 ${index + 1}`}
+              shortcut={`switchToProviderGroup${index + 1}`}
+            />
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          <h3 className="text-sm text-gray-500 dark:text-gray-400">Prompt 组切换</h3>
+          {promptGroups.map((group, index) => (
+            <Shortcut
+              key={group.id}
+              label={group.name || `Prompt 组 ${index + 1}`}
+              shortcut={`switchToPromptGroup${index + 1}`}
+            />
+          ))}
         </div>
 
         {/* Navigation */}

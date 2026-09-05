@@ -109,15 +109,6 @@ Every shortcut is remappable in settings, and the status-bar hints follow your b
 
 ---
 
-## Changelog
-
-### v1.2.5
-
-- Fixed memory-card shortcut navigation logic
-- Memory-card titles may be empty
-
----
-
 ## License
 
 Licensed under **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)**.

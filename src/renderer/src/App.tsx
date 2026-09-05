@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, useNavigate } from 'react-router'
-import { Toaster } from 'sonner'
+import { toast, Toaster } from 'sonner'
 import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
 import AboutPage from '@/help'
@@ -13,25 +13,32 @@ import { getCloneableFields } from '@/lib/utils'
 export default function App() {
   const [initialized, setInitialized] = useState(false)
   const settingsStore = useSettingsStore()
+  const syncSettings = useSettingsStore((state) => state.syncSettings)
   const { shortcuts } = useShortcutsStore()
 
   useEffect(() => {
     window.api.getAppSettings().then((settings) => {
-      const blankFields = Object.keys(settings).filter(
-        (key) => settings[key] && !settingsStore[key]
-      )
-      settingsStore.syncSettings(
-        blankFields.reduce(
-          (acc, key) => {
-            acc[key] = settings[key]
-            return acc
-          },
-          {} as Partial<typeof settingsStore>
-        )
-      )
+      syncSettings({ ...settings, opacity: useSettingsStore.getState().opacity })
       setInitialized(true)
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncSettings])
+
+  useEffect(() => {
+    window.api.onAppSettingsChanged((settings) => {
+      syncSettings({ ...settings, opacity: useSettingsStore.getState().opacity })
+    })
+    return () => {
+      window.api.removeAppSettingsChangedListener()
+    }
+  }, [syncSettings])
+
+  useEffect(() => {
+    window.api.onGroupSwitched((message) => {
+      toast.success(message)
+    })
+    return () => {
+      window.api.removeGroupSwitchedListener()
+    }
   }, [])
 
   useEffect(() => {
@@ -55,11 +62,7 @@ export default function App() {
   }, [settingsStore.theme])
 
   useEffect(() => {
-    console.log('App initShortcuts:', shortcuts) // DEBUG: 检查新键
     window.api.initShortcuts(shortcuts)
-    window.api.getShortcuts().then((shortcutsStatus) => {
-      console.log('Shortcuts registered:', shortcutsStatus) // DEBUG: 主进程状态
-    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

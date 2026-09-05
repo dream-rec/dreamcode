@@ -109,15 +109,6 @@ npm run build:mac    # 或 build:win / build:linux
 
 ---
 
-## 更新日志
-
-### v1.2.5
-
-- 修复记忆卡片快捷键跳转逻辑修复；
-- 记忆卡片标题合法空类型。
-
----
-
 ## 许可协议
 
 本项目采用 **[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)** 协议许可。

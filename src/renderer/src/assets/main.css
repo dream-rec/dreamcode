@@ -7,6 +7,34 @@
   body {
     @apply text-foreground;
   }
+
+  .prose table th,
+  .prose table td {
+    border-color: rgb(209 213 219 / 0.8);
+  }
+
+  .dark .prose table th {
+    color: rgb(255 255 255);
+    background-color: rgb(55 65 81 / 0.8);
+    border-color: rgb(75 85 99 / 0.9);
+  }
+
+  .dark .prose table td {
+    color: rgb(243 244 246);
+    border-color: rgb(75 85 99 / 0.9);
+  }
+
+  .dark .prose a {
+    color: rgb(147 197 253);
+  }
+
+  .dark .prose li::marker {
+    color: rgb(209 213 219);
+  }
+
+  .dark .prose a:hover {
+    color: rgb(191 219 254);
+  }
 }
 
 /* macOS-style window container */
@@ -30,6 +58,23 @@
   @apply h-[calc(100vh-36px)] overflow-y-auto;
   background: rgba(246, 246, 246, 0.88);
   backdrop-filter: blur(16px);
+  scrollbar-color: rgb(156 163 175 / 0.75) transparent;
+  scrollbar-width: thin;
+}
+
+#app-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+#app-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#app-content::-webkit-scrollbar-thumb {
+  background: rgb(156 163 175 / 0.75);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 .dark #app-header {
@@ -39,4 +84,18 @@
 
 .dark #app-content {
   background: rgba(24, 24, 24, 0.88);
+  scrollbar-color: rgb(107 114 128 / 0.9) transparent;
+}
+
+.dark #app-content::-webkit-scrollbar-track {
+  background: rgb(24 24 27 / 0.55);
+}
+
+.dark #app-content::-webkit-scrollbar-thumb {
+  background: rgb(107 114 128 / 0.9);
+  border-color: rgb(24 24 27 / 0.55);
+}
+
+.dark #app-content::-webkit-scrollbar-thumb:hover {
+  background: rgb(156 163 175 / 0.95);
 }
