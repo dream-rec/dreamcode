@@ -24,12 +24,97 @@ export interface PromptGroup extends PromptConfig {
   name: string
 }
 
+export type VoiceAudioSource = 'system' | 'microphone'
+export type VoiceLlmMode = 'shared' | 'custom'
+
+/**
+ * Speech-to-text service. All but `grok2api` speak the OpenAI-compatible
+ * POST {apiBaseURL}/audio/transcriptions; `grok2api` uses POST {apiBaseURL}/stt.
+ * Labels carry the path so the dropdown itself shows which endpoint is called.
+ */
+export type VoiceSttProvider = 'siliconflow' | 'openai' | 'groq' | 'grok2api'
+
+export const VOICE_STT_PROVIDERS: {
+  id: VoiceSttProvider
+  name: string
+  apiBaseURL: string
+  model: string
+}[] = [
+  {
+    id: 'siliconflow',
+    name: 'SenseVoice（/audio/transcriptions）',
+    apiBaseURL: 'https://api.siliconflow.cn/v1',
+    model: 'FunAudioLLM/SenseVoiceSmall'
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI（/audio/transcriptions）',
+    apiBaseURL: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini-transcribe'
+  },
+  {
+    id: 'groq',
+    name: 'Groq Whisper（/audio/transcriptions）',
+    apiBaseURL: 'https://api.groq.com/openai/v1',
+    model: 'whisper-large-v3-turbo'
+  },
+  {
+    id: 'grok2api',
+    name: 'grok2api（/stt）',
+    apiBaseURL: 'http://127.0.0.1:8000/v1',
+    model: 'grok-stt'
+  }
+]
+
+export interface VoiceSttConfig {
+  provider: VoiceSttProvider
+  apiBaseURL: string
+  apiKey: string
+  model: string
+  /** ISO-639-1 hint such as "zh" or "en"; empty lets the model auto-detect. */
+  language: string
+  extraHeaders: string
+  proxyUrl: string
+}
+
+/** Energy based voice-activity detection used to cut the audio stream at pauses. */
+export interface VoiceVadConfig {
+  /** Frames louder than this (dBFS) count as speech. */
+  thresholdDb: number
+  /** Silence longer than this closes the current utterance. */
+  silenceMs: number
+  /** Speech shorter than this is ignored as noise. */
+  minSpeechMs: number
+  /** Hard cut so a long monologue still gets transcribed incrementally. */
+  maxSegmentMs: number
+}
+
+export interface VoiceConfig {
+  audioSource: VoiceAudioSource
+  /** MediaDevices deviceId when audioSource is "microphone"; empty = system default. */
+  audioDeviceId: string
+  /** Application to listen to when audioSource is "system"; empty = the whole system mix. */
+  audioAppId: string
+  /** Display name of `audioAppId`, shown while that app is not running. */
+  audioAppName: string
+  stt: VoiceSttConfig
+  /** "shared" reuses the active Provider group; "custom" uses `llm` below. */
+  llmMode: VoiceLlmMode
+  llm: ProviderConfig
+  /** Overrides the built-in voice system prompt when non-empty. */
+  answerPrompt: string
+  vad: VoiceVadConfig
+  /** Jump to the voice page when listening starts. */
+  autoOpenPage: boolean
+}
+
 export interface AppConfig extends ProviderConfig, PromptConfig {
   autoCheckUpdate: boolean
   providerGroups: ProviderGroup[]
   promptGroups: PromptGroup[]
   activeProviderGroupId: string
   activePromptGroupId: string
+  voice: VoiceConfig
 }
 
 export const defaultProviderConfig: ProviderConfig = {
@@ -44,6 +129,36 @@ export const defaultProviderConfig: ProviderConfig = {
 export const defaultPromptConfig: PromptConfig = {
   codeLanguage: 'typescript',
   customPrompt: ''
+}
+
+export const defaultVoiceSttConfig: VoiceSttConfig = {
+  provider: 'siliconflow',
+  apiBaseURL: '',
+  apiKey: '',
+  model: '',
+  language: '',
+  extraHeaders: '',
+  proxyUrl: ''
+}
+
+export const defaultVoiceVadConfig: VoiceVadConfig = {
+  thresholdDb: -45,
+  silenceMs: 800,
+  minSpeechMs: 200,
+  maxSegmentMs: 20000
+}
+
+export const defaultVoiceConfig: VoiceConfig = {
+  audioSource: 'system',
+  audioDeviceId: '',
+  audioAppId: '',
+  audioAppName: '',
+  stt: { ...defaultVoiceSttConfig },
+  llmMode: 'shared',
+  llm: { ...defaultProviderConfig },
+  answerPrompt: '',
+  vad: { ...defaultVoiceVadConfig },
+  autoOpenPage: true
 }
 
 export function createProviderGroup(
@@ -87,7 +202,8 @@ export const defaultConfig: AppConfig = {
     }
   ],
   activeProviderGroupId: 'provider-1',
-  activePromptGroupId: 'prompt-1'
+  activePromptGroupId: 'prompt-1',
+  voice: defaultVoiceConfig
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -162,6 +278,70 @@ function normalizePromptGroups(value: unknown, fallback: PromptConfig): PromptGr
   }, [])
 }
 
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, value))
+}
+
+function inferSttProvider(apiBaseURL: string): VoiceSttProvider {
+  const match = VOICE_STT_PROVIDERS.find(
+    (provider) => provider.apiBaseURL && provider.apiBaseURL === apiBaseURL.trim()
+  )
+  if (match) return match.id
+  // Unknown gateway (or the legacy `custom` value): it speaks the OpenAI-compatible path.
+  return apiBaseURL.trim() ? 'openai' : defaultVoiceSttConfig.provider
+}
+
+function normalizeVoiceStt(value: unknown, fallback: VoiceSttConfig): VoiceSttConfig {
+  const source = isRecord(value) ? value : {}
+  const str = (key: Exclude<keyof VoiceSttConfig, 'provider'>) =>
+    typeof source[key] === 'string' ? (source[key] as string) : fallback[key]
+  const apiBaseURL = str('apiBaseURL')
+  const provider = VOICE_STT_PROVIDERS.some((item) => item.id === source.provider)
+    ? (source.provider as VoiceSttProvider)
+    : inferSttProvider(apiBaseURL)
+  return {
+    provider,
+    apiBaseURL,
+    apiKey: str('apiKey'),
+    model: str('model'),
+    language: str('language'),
+    extraHeaders: str('extraHeaders'),
+    proxyUrl: str('proxyUrl')
+  }
+}
+
+function normalizeVoiceVad(value: unknown, fallback: VoiceVadConfig): VoiceVadConfig {
+  const source = isRecord(value) ? value : {}
+  return {
+    thresholdDb: clampNumber(source.thresholdDb, fallback.thresholdDb, -80, -10),
+    silenceMs: clampNumber(source.silenceMs, fallback.silenceMs, 200, 5000),
+    minSpeechMs: clampNumber(source.minSpeechMs, fallback.minSpeechMs, 50, 2000),
+    maxSegmentMs: clampNumber(source.maxSegmentMs, fallback.maxSegmentMs, 3000, 120000)
+  }
+}
+
+export function normalizeVoiceConfig(value: unknown): VoiceConfig {
+  const source = isRecord(value) ? value : {}
+  const fallback = defaultVoiceConfig
+  return {
+    audioSource: source.audioSource === 'microphone' ? 'microphone' : 'system',
+    audioDeviceId:
+      typeof source.audioDeviceId === 'string' ? source.audioDeviceId : fallback.audioDeviceId,
+    audioAppId: typeof source.audioAppId === 'string' ? source.audioAppId : fallback.audioAppId,
+    audioAppName:
+      typeof source.audioAppName === 'string' ? source.audioAppName : fallback.audioAppName,
+    stt: normalizeVoiceStt(source.stt, fallback.stt),
+    llmMode: source.llmMode === 'custom' ? 'custom' : 'shared',
+    llm: normalizeProviderConfig(source.llm, fallback.llm),
+    answerPrompt:
+      typeof source.answerPrompt === 'string' ? source.answerPrompt : fallback.answerPrompt,
+    vad: normalizeVoiceVad(source.vad, fallback.vad),
+    autoOpenPage:
+      typeof source.autoOpenPage === 'boolean' ? source.autoOpenPage : fallback.autoOpenPage
+  }
+}
+
 export function normalizeConfig(value: unknown): AppConfig {
   const source = isRecord(value) ? value : {}
   const legacyProvider = normalizeProviderConfig(source, defaultProviderConfig)
@@ -212,6 +392,19 @@ export function normalizeConfig(value: unknown): AppConfig {
     providerGroups: normalizedProviderGroups,
     promptGroups: normalizedPromptGroups,
     activeProviderGroupId,
-    activePromptGroupId
+    activePromptGroupId,
+    voice: normalizeVoiceConfig(source.voice)
+  }
+}
+
+/** The ProviderConfig slice of any settings-like object (used to reuse the active Provider group). */
+export function pickProviderConfig(source: ProviderConfig): ProviderConfig {
+  return {
+    apiProvider: source.apiProvider,
+    apiBaseURL: source.apiBaseURL,
+    apiKey: source.apiKey,
+    extraHeaders: source.extraHeaders,
+    model: source.model,
+    proxyUrl: source.proxyUrl
   }
 }

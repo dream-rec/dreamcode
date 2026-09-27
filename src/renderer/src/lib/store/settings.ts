@@ -1,8 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { defaultConfig, type ProviderGroup, type PromptGroup } from '../../../../shared/settings'
+import {
+  defaultConfig,
+  normalizeVoiceConfig,
+  type ProviderGroup,
+  type PromptGroup,
+  type VoiceConfig
+} from '../../../../shared/settings'
 
-export type { ProviderGroup, PromptGroup }
+export type { ProviderGroup, PromptGroup, VoiceConfig }
 
 interface Settings {
   apiProvider: 'openai' | 'anthropic'
@@ -22,6 +28,7 @@ interface Settings {
   promptGroups: PromptGroup[]
   activeProviderGroupId: string
   activePromptGroupId: string
+  voice: VoiceConfig
 }
 
 interface SettingsStore extends Settings {
@@ -46,7 +53,8 @@ const defaultSettings: Settings = {
   providerGroups: defaultConfig.providerGroups.map((group) => ({ ...group })),
   promptGroups: defaultConfig.promptGroups.map((group) => ({ ...group })),
   activeProviderGroupId: defaultConfig.activeProviderGroupId,
-  activePromptGroupId: defaultConfig.activePromptGroupId
+  activePromptGroupId: defaultConfig.activePromptGroupId,
+  voice: normalizeVoiceConfig(defaultConfig.voice)
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -62,7 +70,12 @@ export const useSettingsStore = create<SettingsStore>()(
     }),
     {
       name: 'dreamcode-settings',
-      version: 7
+      version: 8,
+      migrate: (persisted: unknown) => {
+        // v8 added the voice assistant block; keep everything else the user had.
+        const state = (persisted ?? {}) as Partial<Settings>
+        return { ...state, voice: normalizeVoiceConfig(state.voice) } as SettingsStore
+      }
     }
   )
 )

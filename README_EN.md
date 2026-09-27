@@ -26,6 +26,7 @@
 - **Never steals focus** — screenshots and actions run through global shortcuts; the test page keeps focus and "left the page" checks stay quiet
 - **Two API protocols** — OpenAI-compatible and Claude (Anthropic) native, switched from the settings page
 - **Any model** — no hardcoded model list; type whatever name your provider serves
+- **Voice assistant** — listen to the meeting app's audio (optionally a single chosen app), transcribe it sentence by sentence at natural pauses, and hand spoken questions to an LLM with one shortcut; STT service and answering model are configured separately
 - **Memory cards** — keep prompts, templates, and stock answers ready (Markdown / LaTeX supported) and pull them up with a shortcut
 - **Fully local** — API key and config stay in a local config file; no `.env` dependency, nothing uploaded
 
@@ -92,6 +93,7 @@ npm run build:mac    # or build:win / build:linux
 2. **Screenshot** — capture the question with a shortcut; stack several if the problem spans screens
 3. **Solve** — send to the model with a shortcut; approach and code stream back
 4. **Memory cards** — store prompts and templates, recall them with a shortcut
+5. **Voice assistant** — pick a speech-to-text protocol in settings (`SenseVoice` / `OpenAI` / `Groq Whisper` / `grok2api`; each option shows the endpoint it calls, and any OpenAI-compatible service works too), press `Alt+L` to start listening to the meeting audio; the interviewer's speech shows up line by line. Press `Alt+L` again to stop and send it to the model, or `Alt+Shift+L` to send and keep listening. To ask about one sentence only, select it with `Alt+↑`/`Alt+↓` or the mouse and press `Alt+/`. System audio can also be limited to a single app (Windows 10 2004+ / macOS 13+, Screen Recording permission required); if that is unavailable on macOS, install [BlackHole](https://existential.audio/blackhole/) and switch to an input device. See [docs/voice-assistant-design.md](docs/voice-assistant-design.md)
 
 Works with [SiliconFlow](https://cloud.siliconflow.cn/i/SG8C0772), [OpenRouter](https://openrouter.ai/), OpenAI, Anthropic, and any OpenAI-compatible gateway.
 
@@ -102,6 +104,7 @@ Every shortcut is remappable in settings, and the status-bar hints follow your b
 ## Where it fits
 
 - **Coding interviews** — read the question off the screen and get approach plus code, unseen even while you share your screen
+- **Spoken questions** — the voice assistant transcribes the interviewer in near real time and drafts an answer you can say out loud
 - **Online assessments** — the page never loses focus, so tab-out detection stays quiet
 - **Anything else** — extend it through the custom prompt, e.g. language tests or Q&A drills
 

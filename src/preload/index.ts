@@ -2,6 +2,13 @@ import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
 import type { AppState } from '../main/state'
+import type { VoiceConfig } from '../shared/settings'
+import type {
+  AudioApp,
+  VoiceCaptureCommand,
+  VoiceSegmentPayload,
+  VoiceSnapshot
+} from '../shared/voice'
 
 // Lock renderer zoom to prevent scaling drift from display changes
 webFrame.setZoomFactor(1)
@@ -184,6 +191,84 @@ const api = {
   },
   removeSolutionClearListener: () => {
     ipcRenderer.removeAllListeners('solution-clear')
+  },
+
+  // ---- Voice assistant ----
+  voiceGetSnapshot: (): Promise<VoiceSnapshot> => ipcRenderer.invoke('voice:getSnapshot'),
+  voiceToggleListening: () => ipcRenderer.invoke('voice:toggleListening'),
+  voiceSendNow: () => ipcRenderer.invoke('voice:sendNow'),
+  voiceCancel: () => ipcRenderer.invoke('voice:cancel'),
+  voiceClearSession: () => ipcRenderer.invoke('voice:clearSession'),
+  voiceStopAnswer: () => ipcRenderer.invoke('voice:stopAnswer'),
+  voiceDismissError: () => ipcRenderer.invoke('voice:dismissError'),
+  voiceSelectSegment: (seq: number, extend: boolean) =>
+    ipcRenderer.invoke('voice:selectSegment', seq, extend),
+  voiceMoveSelection: (delta: -1 | 1) => ipcRenderer.invoke('voice:moveSelection', delta),
+  voiceClearSelection: () => ipcRenderer.invoke('voice:clearSelection'),
+  voiceSendSelected: () => ipcRenderer.invoke('voice:sendSelected'),
+  // Per-application audio (native helper in main, PCM streamed back)
+  voiceListAudioApps: (): Promise<AudioApp[]> => ipcRenderer.invoke('voice:listAudioApps'),
+  /** Resolves with a capture id once the helper is running; PCM arrives via onVoiceAppAudio. */
+  voiceAppCaptureStart: (appId: string): Promise<number> =>
+    ipcRenderer.invoke('voice:appCaptureStart', appId),
+  voiceAppCaptureStop: (id: number) => ipcRenderer.invoke('voice:appCaptureStop', id),
+  /** Subscribes to one capture's PCM / end events; returns an unsubscribe function. */
+  onVoiceAppAudio: (
+    id: number,
+    onPcm: (samples: Float32Array) => void,
+    onEnded: (reason: string) => void
+  ) => {
+    const pcmListener = (_event: unknown, payload: { id: number; samples: Float32Array }) => {
+      if (payload.id === id) onPcm(payload.samples)
+    }
+    const endedListener = (_event: unknown, payload: { id: number; reason: string }) => {
+      if (payload.id === id) onEnded(payload.reason)
+    }
+    ipcRenderer.on('voice-app-pcm', pcmListener)
+    ipcRenderer.on('voice-app-ended', endedListener)
+    return () => {
+      ipcRenderer.removeListener('voice-app-pcm', pcmListener)
+      ipcRenderer.removeListener('voice-app-ended', endedListener)
+    }
+  },
+  // Capture controller → main acknowledgements
+  voiceCaptureStarted: () => ipcRenderer.invoke('voice:captureStarted'),
+  voiceCaptureStopped: (requestId: string) => ipcRenderer.invoke('voice:captureStopped', requestId),
+  voiceFlushed: (requestId: string) => ipcRenderer.invoke('voice:flushed', requestId),
+  voiceCaptureError: (message: string) => ipcRenderer.invoke('voice:captureError', message),
+  voicePushSegment: (payload: VoiceSegmentPayload) =>
+    ipcRenderer.invoke('voice:pushSegment', payload),
+  voiceTestTranscribe: (config: VoiceConfig, wav: Uint8Array): Promise<string> =>
+    ipcRenderer.invoke('voice:testTranscribe', config, wav),
+  onVoiceCaptureCommand: (callback: (command: VoiceCaptureCommand) => void) => {
+    ipcRenderer.on('voice-capture-command', (_event, command) => {
+      callback(command)
+    })
+  },
+  removeVoiceCaptureCommandListener: () => {
+    ipcRenderer.removeAllListeners('voice-capture-command')
+  },
+  onVoiceState: (callback: (snapshot: VoiceSnapshot) => void) => {
+    ipcRenderer.on('voice-state', (_event, snapshot) => {
+      callback(snapshot)
+    })
+  },
+  removeVoiceStateListener: () => {
+    ipcRenderer.removeAllListeners('voice-state')
+  },
+  onVoiceAnswerChunk: (callback: (payload: { id: string; chunk: string }) => void) => {
+    ipcRenderer.on('voice-answer-chunk', (_event, payload) => {
+      callback(payload)
+    })
+  },
+  removeVoiceAnswerChunkListener: () => {
+    ipcRenderer.removeAllListeners('voice-answer-chunk')
+  },
+  onNavigateVoicePage: (callback: () => void) => {
+    ipcRenderer.on('navigate-voice-page', callback)
+  },
+  removeNavigateVoicePageListener: () => {
+    ipcRenderer.removeAllListeners('navigate-voice-page')
   }
 }
 

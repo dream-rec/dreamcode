@@ -1,4 +1,4 @@
-import { SettingsIcon, Sun, Moon, StickyNote, Github } from 'lucide-react'
+import { SettingsIcon, Sun, Moon, StickyNote, Github, Mic } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/lib/store/app'
@@ -12,7 +12,9 @@ export function AppHeader() {
   return (
     <div id="app-header" className="flex items-center justify-between px-3">
       {/* macOS traffic light buttons */}
-      <div className={`actions flex items-center gap-1.5 ${ignoreMouse ? 'pointer-events-none' : ''}`}>
+      <div
+        className={`actions flex items-center gap-1.5 ${ignoreMouse ? 'pointer-events-none' : ''}`}
+      >
         <button
           className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition-all"
           onClick={() => window.close()}
@@ -35,6 +37,14 @@ export function AppHeader() {
 
       {/* Right actions */}
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
+        <Button
+          variant="ghost"
+          className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+          onClick={() => navigate('/voice')}
+          title="语音助手"
+        >
+          <Mic className="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"

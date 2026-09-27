@@ -14,10 +14,18 @@ export default defineConfig({
             src: 'src/main/prompts.md',
             dest: '.'
           },
+          {
+            src: 'src/main/prompts-voice.md',
+            dest: '.'
+          },
           ...(process.platform === 'darwin'
             ? [
                 {
                   src: 'resources/bin/capture-below',
+                  dest: 'bin'
+                },
+                {
+                  src: 'resources/bin/audio-tap',
                   dest: 'bin'
                 }
               ]

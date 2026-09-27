@@ -5,6 +5,8 @@ import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
 import AboutPage from '@/help'
 import MemoryCardsPage from '@/memory-cards'
+import VoicePage from '@/voice'
+import { VoiceCaptureController } from '@/voice/VoiceCaptureController'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useMemoryCardsStore } from '@/lib/store/memory-cards'
@@ -70,11 +72,13 @@ export default function App() {
     <>
       <HashRouter>
         <ShortcutNavigator />
+        <VoiceCaptureController />
         <Routes>
           <Route index element={<CoderPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="memory-cards" element={<MemoryCardsPage />} />
+          <Route path="voice" element={<VoicePage />} />
         </Routes>
       </HashRouter>
 
@@ -105,6 +109,15 @@ function ShortcutNavigator() {
     })
     return () => {
       window.api.removeNavigateCoderPageListener()
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    window.api.onNavigateVoicePage(() => {
+      navigate('/voice')
+    })
+    return () => {
+      window.api.removeNavigateVoicePageListener()
     }
   }, [navigate])
 

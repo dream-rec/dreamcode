@@ -2,6 +2,29 @@
 
 本项目的所有重要变更均记录在此文件中。
 
+## [1.3.0] - 2026-09-23
+
+### 新增
+
+- 新增语音助手：监听会议软件音频（系统音频或任意输入设备），按停顿逐句语音识别，快捷键手动停止并交给大模型解答，回答流式显示在独立的「语音助手」页。
+- 系统音频可只采集**指定软件**：macOS 13+ 用 ScreenCaptureKit helper（`resources/bin/audio-tap`），Windows 10 2004+ x64 用 WASAPI 进程回环；音频来源在设置页改为「系统音频（可选软件）/ 输入设备」两行单选。
+- 语音识别服务新增「调用协议」下拉，选项名自带请求路径：`SenseVoice（/audio/transcriptions）`、`OpenAI（/audio/transcriptions）`、`Groq Whisper（/audio/transcriptions）`、`grok2api（/stt）`。grok2api 支持 `text` 与词级时间戳两种响应；识别提示词（`prompt`）字段已移除。
+- 语音助手页支持按断句发送：可以只把选中的一句（或连续几句，`Shift+点击`多选）交给大模型，未选中时发送最新一句；已发送的行保留在列表里并置灰，不会被重复发送，「清空」才真正删除。
+- 新增七个语音助手快捷键，均可在设置页自定义、帮助页同步展示：开始/停止监听并发送、发送并继续监听、选中上一句、选中下一句、发送选中断句、取消监听、清空语音对话；「停止生成」同时作用于语音回答。
+- 解答模型可复用当前 Provider 组，也可单独配置；内置面试口述风格提示词，可自定义。
+- 断句检测参数（阈值、静音时长、最短语音、单段最长）可在设置页调节，并有实时电平条辅助。
+- 新增设计文档 `docs/voice-assistant-design.md`。
+
+### 修复
+
+- 修复版本检查把「本地版本高于 GitHub 最新发布」误判为有更新的问题（改为严格比较 semver），并让 macOS 的更新提示挂在主窗口上，避免应用级模态框阻塞主进程导致快捷键与 IPC 全部无响应。
+- 修复按应用采集 helper 在 stdin 被提前关闭时静默退出（返回空列表）的问题；ScreenCaptureKit 挂起时不再等到父进程 `SIGTERM` 后只报 `Command failed`，改为 20 s 超时并返回可操作的中文提示（设置页直接展示）。
+
+### 改进
+
+- 主进程流处理工具（think 标签过滤、错误信息提取）抽为独立模块供截图与语音链路共用；模型构造支持任意 Provider 配置。
+- macOS 打包新增麦克风权限 entitlement。
+
 ## [1.2.6] - 2026-09-05
 
 ### 新增
@@ -31,5 +54,6 @@
 - 修复记忆卡片快捷键跳转逻辑。
 - 允许记忆卡片标题为空。
 
+[1.3.0]: https://github.com/dream-rec/dreamcode/compare/v1.2.6...v1.3.0
 [1.2.6]: https://github.com/dream-rec/dreamcode/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/dream-rec/dreamcode/releases/tag/v1.2.5

@@ -82,7 +82,47 @@ export function CustomShortcuts() {
             description="在当前对话中追加截图并生成解题建议，适用于长题目等场景"
             shortcut="appendScreenshot"
           />
-          <Shortcut label="停止生成" shortcut="stopSolutionStream" />
+          <Shortcut
+            label="停止生成"
+            description="同时也会停止语音助手的回答"
+            shortcut="stopSolutionStream"
+          />
+        </div>
+
+        {/* Voice assistant */}
+        <div className="space-y-2">
+          <h3 className="text-sm text-gray-500 dark:text-gray-400">语音助手</h3>
+          <Shortcut
+            label="开始 / 停止监听"
+            description="第一次按开始监听，再按一次停止监听并把识别内容发给大模型"
+            shortcut="toggleVoiceListening"
+          />
+          <Shortcut
+            label="发送并继续监听"
+            description="把目前识别到的内容发出去，同时继续监听后面的话"
+            shortcut="voiceSendNow"
+          />
+          <Shortcut
+            label="取消监听"
+            description="停止监听并丢弃未发送的内容"
+            shortcut="cancelVoiceListening"
+          />
+          <Shortcut
+            label="清空语音对话"
+            description="清除识别记录、回答和上下文"
+            shortcut="clearVoiceSession"
+          />
+          <Shortcut
+            label="选中上一句"
+            description="在语音助手页的识别记录中向上选择断句（也可以直接鼠标点击，Shift+点击多选）"
+            shortcut="voiceSelectPrev"
+          />
+          <Shortcut label="选中下一句" shortcut="voiceSelectNext" />
+          <Shortcut
+            label="发送选中断句"
+            description="只把选中的断句发给大模型并继续监听；未选中时发送最新一句"
+            shortcut="voiceSendSelected"
+          />
         </div>
 
         <div className="space-y-2">

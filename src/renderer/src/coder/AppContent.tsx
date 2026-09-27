@@ -183,13 +183,23 @@ export function AppContent() {
 function ShortcutTip() {
   const { shortcuts } = useShortcutsStore()
   return (
-    <div className="flex items-center justify-center h-full text-xl text-gray-400 select-none">
-      请按下快捷键
-      <ShortcutRenderer
-        shortcut={shortcuts.takeScreenshot.key}
-        className="mx-1 font-bold text-black dark:text-white"
-      />
-      抓取屏幕进行分析
+    <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 select-none">
+      <div className="text-xl">
+        请按下快捷键
+        <ShortcutRenderer
+          shortcut={shortcuts.takeScreenshot.key}
+          className="mx-1 font-bold text-black dark:text-white"
+        />
+        抓取屏幕进行分析
+      </div>
+      <div className="text-sm">
+        或按
+        <ShortcutRenderer
+          shortcut={shortcuts.toggleVoiceListening.key}
+          className="mx-1 scale-90 inline-block"
+        />
+        监听会议音频，让语音助手解答口头提问
+      </div>
     </div>
   )
 }

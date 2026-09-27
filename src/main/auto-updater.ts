@@ -10,14 +10,34 @@ function getAppVersion(): string {
   return app.getVersion()
 }
 
-async function checkForUpdateViaGitHub(): Promise<{ hasUpdate: boolean; latestVersion?: string; releaseUrl?: string }> {
+/** True when `latest` is a strictly newer semver than `current` (dev builds ahead of the release are not "updates"). */
+function isNewerVersion(latest: string, current: string): boolean {
+  const parse = (version: string): number[] =>
+    version
+      .replace(/^v/, '')
+      .split(/[.-]/)
+      .slice(0, 3)
+      .map((part) => Number.parseInt(part, 10) || 0)
+  const a = parse(latest)
+  const b = parse(current)
+  for (let i = 0; i < 3; i += 1) {
+    if (a[i] !== b[i]) return a[i] > b[i]
+  }
+  return false
+}
+
+async function checkForUpdateViaGitHub(): Promise<{
+  hasUpdate: boolean
+  latestVersion?: string
+  releaseUrl?: string
+}> {
   try {
     const response = await fetch(GITHUB_API_LATEST)
     if (!response.ok) return { hasUpdate: false }
     const data = await response.json()
     const latestVersion = (data.tag_name as string).replace(/^v/, '')
     const currentVersion = getAppVersion()
-    const hasUpdate = latestVersion !== currentVersion
+    const hasUpdate = isNewerVersion(latestVersion, currentVersion)
     return { hasUpdate, latestVersion, releaseUrl: data.html_url }
   } catch {
     return { hasUpdate: false }
@@ -82,7 +102,11 @@ function initWindowsUpdater(): void {
 async function initMacUpdater(): Promise<void> {
   const { hasUpdate, latestVersion, releaseUrl } = await checkForUpdateViaGitHub()
   if (hasUpdate && latestVersion && releaseUrl) {
-    const result = await dialog.showMessageBox({
+    // Attach to the main window so macOS shows a sheet instead of an app-modal alert that
+    // blocks the main process (and every IPC / shortcut) until it is dismissed.
+    const parent =
+      global.mainWindow && !global.mainWindow.isDestroyed() ? global.mainWindow : undefined
+    const result = await dialog.showMessageBox(parent!, {
       type: 'info',
       buttons: ['前往下载', '稍后'],
       defaultId: 0,
@@ -108,7 +132,7 @@ ipcMain.handle('checkForUpdate', async () => {
       if (result && result.updateInfo) {
         const currentVersion = getAppVersion()
         const latestVersion = result.updateInfo.version
-        return { hasUpdate: latestVersion !== currentVersion, latestVersion }
+        return { hasUpdate: isNewerVersion(latestVersion, currentVersion), latestVersion }
       }
     } catch {
       // fallback to GitHub API

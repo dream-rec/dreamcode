@@ -29,6 +29,7 @@ process.on('uncaughtException', (error) => {
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import './shortcuts'
 import { createWindow } from './main-window'
+import { initVoice } from './voice'
 import { initAutoUpdater } from './auto-updater'
 
 // This method will be called when Electron has finished
@@ -46,6 +47,7 @@ app.whenReady().then(() => {
   })
 
   createWindow()
+  initVoice()
 
   // Configure auto-updater
   initAutoUpdater()

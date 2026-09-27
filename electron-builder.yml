@@ -13,6 +13,8 @@ files:
   - '!out/main/bin/**'
 asarUnpack:
   - resources/**
+  # Per-app audio capture helper (spawned as a child process, so it cannot live inside app.asar)
+  - node_modules/application-loopback/bin/**
 win:
   executableName: DreamCode
   target:
@@ -37,6 +39,7 @@ mac:
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSScreenCaptureUsageDescription: Needed to capture system audio and to listen to a single application's audio.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false

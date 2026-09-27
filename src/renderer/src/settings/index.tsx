@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/lib/store/settings'
 import { getCloneableFields } from '@/lib/utils'
 import { CustomShortcuts, ResetDefaultShortcuts } from './CustomShortcuts'
 import { GroupSettings } from './GroupSettings'
+import { VoiceSettings } from './VoiceSettings'
 
 export default function SettingsPage() {
   const settingsStore = useSettingsStore()
@@ -20,17 +21,20 @@ export default function SettingsPage() {
   const [activePromptGroupId, setActivePromptGroupId] = useState(settingsStore.activePromptGroupId)
   const [opacity, setOpacity] = useState(settingsStore.opacity)
   const [fontSize, setFontSize] = useState(settingsStore.fontSize)
+  const [voice, setVoice] = useState(settingsStore.voice)
 
   useEffect(() => {
     setProviderGroups(settingsStore.providerGroups)
     setPromptGroups(settingsStore.promptGroups)
     setActiveProviderGroupId(settingsStore.activeProviderGroupId)
     setActivePromptGroupId(settingsStore.activePromptGroupId)
+    setVoice(settingsStore.voice)
   }, [
     settingsStore.providerGroups,
     settingsStore.promptGroups,
     settingsStore.activeProviderGroupId,
-    settingsStore.activePromptGroupId
+    settingsStore.activePromptGroupId,
+    settingsStore.voice
   ])
 
   useEffect(() => {
@@ -63,6 +67,7 @@ export default function SettingsPage() {
       promptGroups,
       activeProviderGroupId: activeProvider.id,
       activePromptGroupId: activePrompt.id,
+      voice,
       opacity,
       fontSize
     }
@@ -113,6 +118,8 @@ export default function SettingsPage() {
           onProviderGroupSelect={setActiveProviderGroupId}
           onPromptGroupSelect={setActivePromptGroupId}
         />
+
+        <VoiceSettings value={voice} onChange={setVoice} />
 
         <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50">
           <h2 className="text-lg font-semibold mb-4 flex items-center">

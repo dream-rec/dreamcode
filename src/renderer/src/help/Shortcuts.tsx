@@ -12,6 +12,7 @@ export function Shortcuts() {
     >
       <ShortcutItemGroup category="Window Management" />
       <ShortcutItemGroup category="Screenshot & AI" />
+      <ShortcutItemGroup category="Voice Assistant" />
       <ShortcutItemGroup category="Navigation" />
       <ShortcutItemGroup category="Memory Cards" />
       <ShortcutItemGroup category="Window Movement" />
@@ -50,6 +51,7 @@ const getCategoryName = (category: string) => {
   const categoryMap: Record<string, string> = {
     'Window Management': '窗口管理',
     'Screenshot & AI': '截图与AI',
+    'Voice Assistant': '语音助手',
     Navigation: '页面导航',
     'Memory Cards': '记忆卡片',
     'Window Movement': '窗口移动',
@@ -66,6 +68,13 @@ const getShortcutDescription = (action: string) => {
     takeScreenshot: '截图并生成解题建议（会新开对话）',
     appendScreenshot: '追加截图并生成解题建议',
     stopSolutionStream: '停止生成',
+    toggleVoiceListening: '开始监听 / 停止监听并发送',
+    voiceSendNow: '发送已识别内容并继续监听',
+    cancelVoiceListening: '取消监听（丢弃未发送内容）',
+    clearVoiceSession: '清空语音对话',
+    voiceSelectPrev: '选中上一句识别内容',
+    voiceSelectNext: '选中下一句识别内容',
+    voiceSendSelected: '只发送选中的断句（未选中时发送最新一句）',
     pageUp: '向上翻页',
     pageDown: '向下翻页',
     backToCoderPage: '返回主解题页',

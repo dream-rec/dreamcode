@@ -60,6 +60,29 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     key: 'Alt+.',
     category: 'Screenshot & AI'
   },
+  toggleVoiceListening: {
+    action: 'toggleVoiceListening',
+    key: 'Alt+L',
+    category: 'Voice Assistant'
+  },
+  voiceSendNow: { action: 'voiceSendNow', key: 'Alt+Shift+L', category: 'Voice Assistant' },
+  cancelVoiceListening: {
+    action: 'cancelVoiceListening',
+    key: 'Alt+,',
+    category: 'Voice Assistant'
+  },
+  clearVoiceSession: {
+    action: 'clearVoiceSession',
+    key: 'Alt+Shift+,',
+    category: 'Voice Assistant'
+  },
+  voiceSelectPrev: { action: 'voiceSelectPrev', key: 'Alt+Up', category: 'Voice Assistant' },
+  voiceSelectNext: { action: 'voiceSelectNext', key: 'Alt+Down', category: 'Voice Assistant' },
+  voiceSendSelected: {
+    action: 'voiceSendSelected',
+    key: 'Alt+/',
+    category: 'Voice Assistant'
+  },
   pageUp: { action: 'pageUp', key: 'CommandOrControl+J', category: 'Navigation' },
   pageDown: { action: 'pageDown', key: 'CommandOrControl+K', category: 'Navigation' },
   backToCoderPage: {
@@ -159,7 +182,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
     }),
     {
       name: 'dreamcode-shortcuts',
-      version: 5,
+      version: 7,
       migrate: (state: unknown) => {
         if (!isPersistedShortcutsState(state) || !state.shortcuts) return state as ShortcutsStore
         // Merge in any new default shortcuts that are missing
