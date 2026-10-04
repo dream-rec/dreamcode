@@ -462,3 +462,63 @@ test('page up/down shortcuts broadcast on any page so the voice page can scroll'
   registered.get('CommandOrControl+K')()
   assert.deepEqual(sent, ['scroll-page-up', 'scroll-page-down'])
 })
+
+function shortcutsFixture() {
+  const handlers = new Map(),
+    registered = new Map()
+  const load = createLoader({
+    electron: {
+      ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
+      globalShortcut: {
+        register: (key, callback) => {
+          if (registered.has(key)) return false
+          registered.set(key, callback)
+          return true
+        },
+        unregister: (key) => registered.delete(key)
+      }
+    },
+    './screenshots': {},
+    './settings': {},
+    './voice': {},
+    './state': { state: { inCoderPage: false, ignoreMouse: false } }
+  })
+  load('src/main/shortcuts.ts')
+  return { handlers, registered }
+}
+
+test('rebinding an action releases its previous key', () => {
+  const { handlers, registered } = shortcutsFixture()
+  handlers.get('initShortcuts')({}, { ignoreOrEnableMouse: { key: 'Alt+M' } })
+  assert.equal(registered.has('Alt+M'), true)
+
+  handlers.get('updateShortcuts')({}, [
+    { action: 'ignoreOrEnableMouse', key: 'CommandOrControl+M' }
+  ])
+  assert.equal(registered.has('Alt+M'), false)
+  assert.equal(registered.has('CommandOrControl+M'), true)
+
+  // 重绑后重启：只剩新按键
+  const restarted = shortcutsFixture()
+  restarted.handlers.get('initShortcuts')(
+    {},
+    { ignoreOrEnableMouse: { key: 'CommandOrControl+M' } }
+  )
+  assert.equal(restarted.registered.has('Alt+M'), false)
+  assert.equal(restarted.registered.has('CommandOrControl+M'), true)
+})
+
+test('initShortcuts releases keys of actions missing from the configuration', () => {
+  const { handlers, registered } = shortcutsFixture()
+  handlers.get('initShortcuts')(
+    {},
+    { ignoreOrEnableMouse: { key: 'Alt+M' }, pageUp: { key: 'CommandOrControl+J' } }
+  )
+  assert.equal(registered.has('Alt+M'), true)
+
+  // 迁移丢弃废弃动作后，渲染进程只会上报保留下来的动作
+  handlers.get('initShortcuts')({}, { pageUp: { key: 'CommandOrControl+J' } })
+  assert.equal(registered.has('Alt+M'), false)
+  assert.equal(registered.has('CommandOrControl+J'), true)
+  assert.equal(handlers.get('getShortcuts')().ignoreOrEnableMouse, undefined)
+})

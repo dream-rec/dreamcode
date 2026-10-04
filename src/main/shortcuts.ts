@@ -298,8 +298,15 @@ ipcMain.handle('getShortcuts', () => shortcuts)
 
 ipcMain.handle(
   'initShortcuts',
-  (_event, shortcuts: Record<string, { action: string; key: string }>) => {
-    Object.entries(shortcuts).forEach(([action, { key }]) => registerShortcut(action, key))
+  (_event, nextShortcuts: Record<string, { action: string; key: string }>) => {
+    // 渲染进程上报的是完整配置：除了注册新增/变更项，还要释放已从配置里移除的动作，
+    // 否则废弃动作会一直占着旧按键，直到主进程重启。
+    Object.entries(nextShortcuts).forEach(([action, { key }]) => registerShortcut(action, key))
+    Object.keys(shortcuts).forEach((action) => {
+      if (nextShortcuts[action]) return
+      unregisterShortcut(action)
+      delete shortcuts[action]
+    })
   }
 )
 
