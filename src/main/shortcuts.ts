@@ -120,8 +120,9 @@ const callbacks: Record<string, () => void> = {
   },
 
   ignoreOrEnableMouse: () => {
+    // 语音页/记忆卡片页同样需要穿透（覆盖在会议窗口上时），因此不限制当前页面
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
     state.ignoreMouse = !state.ignoreMouse
     mainWindow.setIgnoreMouseEvents(state.ignoreMouse)
     mainWindow.webContents.send('sync-app-state', state)

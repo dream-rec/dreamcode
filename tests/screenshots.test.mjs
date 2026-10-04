@@ -420,9 +420,30 @@ test('obsolete shortcut callbacks are unavailable and reassigning a failed key p
 })
 
 test('page up/down shortcuts broadcast on any page so the voice page can scroll', () => {
+  const { handlers, registered, sent } = shortcutsFixture()
+  handlers.get('initShortcuts')(
+    {},
+    {
+      pageUp: { key: 'CommandOrControl+J' },
+      pageDown: { key: 'CommandOrControl+K' }
+    }
+  )
+  registered.get('CommandOrControl+J')()
+  registered.get('CommandOrControl+K')()
+  assert.deepEqual(sent, ['scroll-page-up', 'scroll-page-down'])
+})
+
+function shortcutsFixture() {
   const handlers = new Map(),
     registered = new Map(),
-    sent = []
+    sent = [],
+    mouseEvents = [],
+    state = { inCoderPage: false, ignoreMouse: false }
+  const mainWindow = {
+    isDestroyed: () => false,
+    setIgnoreMouseEvents: (ignore) => mouseEvents.push(ignore),
+    webContents: { send: (channel) => sent.push(channel) }
+  }
   const load = createLoader(
     {
       electron: {
@@ -439,53 +460,27 @@ test('page up/down shortcuts broadcast on any page so the voice page can scroll'
       './screenshots': {},
       './settings': {},
       './voice': {},
-      './state': { state: { inCoderPage: false, ignoreMouse: false } }
+      './state': { state }
     },
-    {
-      global: {
-        mainWindow: {
-          isDestroyed: () => false,
-          webContents: { send: (channel) => sent.push(channel) }
-        }
-      }
-    }
+    { global: { mainWindow } }
   )
   load('src/main/shortcuts.ts')
-  handlers.get('initShortcuts')(
-    {},
-    {
-      pageUp: { key: 'CommandOrControl+J' },
-      pageDown: { key: 'CommandOrControl+K' }
-    }
-  )
-  registered.get('CommandOrControl+J')()
-  registered.get('CommandOrControl+K')()
-  assert.deepEqual(sent, ['scroll-page-up', 'scroll-page-down'])
-})
-
-function shortcutsFixture() {
-  const handlers = new Map(),
-    registered = new Map()
-  const load = createLoader({
-    electron: {
-      ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
-      globalShortcut: {
-        register: (key, callback) => {
-          if (registered.has(key)) return false
-          registered.set(key, callback)
-          return true
-        },
-        unregister: (key) => registered.delete(key)
-      }
-    },
-    './screenshots': {},
-    './settings': {},
-    './voice': {},
-    './state': { state: { inCoderPage: false, ignoreMouse: false } }
-  })
-  load('src/main/shortcuts.ts')
-  return { handlers, registered }
+  return { handlers, registered, sent, mouseEvents, state }
 }
+
+test('mouse passthrough toggles outside the coder page too', () => {
+  const { handlers, registered, sent, mouseEvents, state } = shortcutsFixture()
+  handlers.get('initShortcuts')({}, { ignoreOrEnableMouse: { key: 'CommandOrControl+M' } })
+
+  registered.get('CommandOrControl+M')()
+  assert.equal(state.ignoreMouse, true)
+  assert.deepEqual(mouseEvents, [true])
+  assert.deepEqual(sent, ['sync-app-state'])
+
+  registered.get('CommandOrControl+M')()
+  assert.equal(state.ignoreMouse, false)
+  assert.deepEqual(mouseEvents, [true, false])
+})
 
 test('rebinding an action releases its previous key', () => {
   const { handlers, registered } = shortcutsFixture()
