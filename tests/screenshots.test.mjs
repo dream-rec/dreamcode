@@ -341,7 +341,7 @@ test('text follow-up failure is truthful; later screenshot retains the actual fa
   assert.deepEqual(images(f.requests[2].messages.at(-1)), ['image-2'])
 })
 
-test('v9 migration removes obsolete manual actions and preserves all other custom bindings', () => {
+test('v10 migration removes obsolete manual actions and preserves all other custom bindings', () => {
   let options
   const load = createLoader({
     zustand: { create: () => (initializer) => initializer(() => {}) },
@@ -354,15 +354,16 @@ test('v9 migration removes obsolete manual actions and preserves all other custo
     '@/lib/utils/env': { isMac: true }
   })
   load('src/renderer/src/lib/store/shortcuts.ts')
-  assert.equal(options.version, 9)
-  for (const version of [7, 8]) {
+  assert.equal(options.version, 10)
+  for (const version of [7, 8, 9]) {
     const previous = {
       shortcuts: {
         appendScreenshot: { action: 'appendScreenshot', key: 'Control+8' },
         takeScreenshot: { action: 'takeScreenshot', key: 'Control+9' },
         toggleVoiceListening: { action: 'toggleVoiceListening', key: 'Control+L' },
         followUpScreenshot: { action: 'followUpScreenshot', key: 'Alt+F' },
-        sendScreenshots: { action: 'sendScreenshots', key: 'Alt+S' }
+        sendScreenshots: { action: 'sendScreenshots', key: 'Alt+S' },
+        openMemoryCards: { action: 'openMemoryCards', key: 'CommandOrControl+R' }
       }
     }
     const next = options.migrate(previous, version)
@@ -371,6 +372,7 @@ test('v9 migration removes obsolete manual actions and preserves all other custo
     assert.equal(next.shortcuts.toggleVoiceListening.key, 'Control+L')
     assert.equal(next.shortcuts.followUpScreenshot, undefined)
     assert.equal(next.shortcuts.sendScreenshots, undefined)
+    assert.equal(next.shortcuts.openMemoryCards, undefined)
   }
 })
 
@@ -401,7 +403,8 @@ test('obsolete shortcut callbacks are unavailable and reassigning a failed key p
       takeScreenshot: { key: 'Alt+Shift+F' },
       appendScreenshot: { key: 'Alt+Shift+F' },
       followUpScreenshot: { key: 'Alt+F' },
-      sendScreenshots: { key: 'Alt+S' }
+      sendScreenshots: { key: 'Alt+S' },
+      openMemoryCards: { key: 'CommandOrControl+R' }
     }
   )
   const state = handlers.get('getShortcuts')()
@@ -409,7 +412,53 @@ test('obsolete shortcut callbacks are unavailable and reassigning a failed key p
   assert.equal(state.appendScreenshot.status, 'failed')
   assert.equal(state.followUpScreenshot, undefined)
   assert.equal(state.sendScreenshots, undefined)
+  assert.equal(state.openMemoryCards, undefined)
+  assert.equal(registered.has('CommandOrControl+R'), false)
   const originalCallback = registered.get('Alt+Shift+F')
   handlers.get('updateShortcuts')({}, [{ action: 'appendScreenshot', key: 'Alt+Shift+G' }])
   assert.equal(registered.get('Alt+Shift+F'), originalCallback)
+})
+
+test('page up/down shortcuts broadcast on any page so the voice page can scroll', () => {
+  const handlers = new Map(),
+    registered = new Map(),
+    sent = []
+  const load = createLoader(
+    {
+      electron: {
+        ipcMain: { handle: (name, fn) => handlers.set(name, fn) },
+        globalShortcut: {
+          register: (key, callback) => {
+            if (registered.has(key)) return false
+            registered.set(key, callback)
+            return true
+          },
+          unregister: (key) => registered.delete(key)
+        }
+      },
+      './screenshots': {},
+      './settings': {},
+      './voice': {},
+      './state': { state: { inCoderPage: false, ignoreMouse: false } }
+    },
+    {
+      global: {
+        mainWindow: {
+          isDestroyed: () => false,
+          webContents: { send: (channel) => sent.push(channel) }
+        }
+      }
+    }
+  )
+  load('src/main/shortcuts.ts')
+  handlers.get('initShortcuts')(
+    {},
+    {
+      pageUp: { key: 'CommandOrControl+J' },
+      pageDown: { key: 'CommandOrControl+K' }
+    }
+  )
+  registered.get('CommandOrControl+J')()
+  registered.get('CommandOrControl+K')()
+  assert.deepEqual(sent, ['scroll-page-up', 'scroll-page-down'])
 })

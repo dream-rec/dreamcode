@@ -128,20 +128,14 @@ const callbacks: Record<string, () => void> = {
   },
   pageUp: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('scroll-page-up')
   },
 
   pageDown: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
-    mainWindow.webContents.send('scroll-page-down')
-  },
-
-  openMemoryCards: () => {
-    const mainWindow = global.mainWindow
     if (!mainWindow || mainWindow.isDestroyed()) return
-    mainWindow.webContents.send('navigate-memory-card', 0)
+    mainWindow.webContents.send('scroll-page-down')
   },
 
   backToCoderPage: () => {

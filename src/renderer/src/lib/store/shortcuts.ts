@@ -182,10 +182,11 @@ export const useShortcutsStore = create<ShortcutsStore>()(
     }),
     {
       name: 'dreamcode-shortcuts',
-      version: 9,
+      version: 10,
       migrate: (state: unknown) => {
         if (!isPersistedShortcutsState(state) || !state.shortcuts) return state as ShortcutsStore
-        // Merge in any new default shortcuts that are missing
+        // 合并新增默认项；同时丢弃已下线的动作（例如更名前的 openMemoryCards），
+        // 否则旧配置会继续占用旧按键并触发已废弃的行为。
         const defaults = Object.fromEntries(
           Object.entries(defaultShortcuts).map(([action, shortcut]) => [
             action,
@@ -197,8 +198,8 @@ export const useShortcutsStore = create<ShortcutsStore>()(
           shortcuts: {
             ...defaults,
             ...Object.fromEntries(
-              Object.entries(state.shortcuts).filter(
-                ([action]) => action !== 'followUpScreenshot' && action !== 'sendScreenshots'
+              Object.entries(state.shortcuts).filter(([action]) =>
+                Object.prototype.hasOwnProperty.call(defaultShortcuts, action)
               )
             )
           }
