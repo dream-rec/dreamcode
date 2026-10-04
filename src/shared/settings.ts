@@ -24,7 +24,7 @@ export interface PromptGroup extends PromptConfig {
   name: string
 }
 
-export type VoiceAudioSource = 'system' | 'microphone'
+export type VoiceAudioSource = 'system'
 export type VoiceLlmMode = 'shared' | 'custom'
 
 /**
@@ -91,9 +91,7 @@ export interface VoiceVadConfig {
 
 export interface VoiceConfig {
   audioSource: VoiceAudioSource
-  /** MediaDevices deviceId when audioSource is "microphone"; empty = system default. */
-  audioDeviceId: string
-  /** Application to listen to when audioSource is "system"; empty = the whole system mix. */
+  /** Application output to listen to; empty = the whole system output mix. */
   audioAppId: string
   /** Display name of `audioAppId`, shown while that app is not running. */
   audioAppName: string
@@ -150,7 +148,6 @@ export const defaultVoiceVadConfig: VoiceVadConfig = {
 
 export const defaultVoiceConfig: VoiceConfig = {
   audioSource: 'system',
-  audioDeviceId: '',
   audioAppId: '',
   audioAppName: '',
   stt: { ...defaultVoiceSttConfig },
@@ -324,13 +321,22 @@ function normalizeVoiceVad(value: unknown, fallback: VoiceVadConfig): VoiceVadCo
 export function normalizeVoiceConfig(value: unknown): VoiceConfig {
   const source = isRecord(value) ? value : {}
   const fallback = defaultVoiceConfig
+  // Legacy input selections may retain an unrelated app from an earlier output selection.
+  // Do not activate it during migration. Explicit system selections keep their app target,
+  // even if the old settings object also contains an unused input-device ID.
+  const hasLegacyInput =
+    source.audioSource !== 'system' &&
+    (source.audioSource !== undefined || 'audioDeviceId' in source)
   return {
-    audioSource: source.audioSource === 'microphone' ? 'microphone' : 'system',
-    audioDeviceId:
-      typeof source.audioDeviceId === 'string' ? source.audioDeviceId : fallback.audioDeviceId,
-    audioAppId: typeof source.audioAppId === 'string' ? source.audioAppId : fallback.audioAppId,
+    audioSource: 'system',
+    audioAppId:
+      !hasLegacyInput && typeof source.audioAppId === 'string'
+        ? source.audioAppId
+        : fallback.audioAppId,
     audioAppName:
-      typeof source.audioAppName === 'string' ? source.audioAppName : fallback.audioAppName,
+      !hasLegacyInput && typeof source.audioAppName === 'string'
+        ? source.audioAppName
+        : fallback.audioAppName,
     stt: normalizeVoiceStt(source.stt, fallback.stt),
     llmMode: source.llmMode === 'custom' ? 'custom' : 'shared',
     llm: normalizeProviderConfig(source.llm, fallback.llm),

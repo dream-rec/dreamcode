@@ -19,75 +19,49 @@ export interface CaptureCallbacks {
   onEnded: (reason: string) => void
 }
 
-function describeMediaError(error: unknown, source: VoiceCaptureConfig['source']): string {
+function describeMediaError(error: unknown): string {
   const name = error instanceof Error ? error.name : ''
   const message = error instanceof Error ? error.message : String(error)
   const isMac = navigator.userAgent.includes('Mac')
 
-  if (source === 'system') {
-    if (name === 'NotAllowedError') {
-      return isMac
-        ? '系统音频采集被拒绝：请在「系统设置 → 隐私与安全性 → 屏幕录制」中允许 DreamCode，然后重启应用'
-        : '系统音频采集被拒绝，请检查系统权限'
-    }
-    if (
-      name === 'NotSupportedError' ||
-      name === 'NotFoundError' ||
-      /not supported|no audio/i.test(message)
-    ) {
-      return isMac
-        ? '当前系统不支持直接采集系统音频：请安装 BlackHole 等虚拟声卡，把会议软件输出到该设备，并在设置中把音频来源改为「输入设备」'
-        : '系统音频采集不可用，请在设置中改用「输入设备」'
-    }
-    return `系统音频采集失败：${message}`
-  }
-
   if (name === 'NotAllowedError') {
     return isMac
-      ? '麦克风权限被拒绝：请在「系统设置 → 隐私与安全性 → 麦克风」中允许 DreamCode'
-      : '麦克风权限被拒绝，请检查系统权限'
+      ? '系统音频采集被拒绝：请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许 DreamCode，然后重启应用'
+      : '系统音频采集被拒绝，请检查系统权限'
   }
-  if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-    return '找不到所选输入设备，请在设置中重新选择'
+  if (
+    name === 'NotSupportedError' ||
+    name === 'NotFoundError' ||
+    /not supported|no audio/i.test(message)
+  ) {
+    return '当前系统无法采集全部系统声音，请在设置中选择指定应用输出，或检查系统版本与音频录制权限'
   }
-  return `音频输入采集失败：${message}`
+  return `系统音频采集失败：${message}`
 }
 
-async function acquireStream(config: VoiceCaptureConfig): Promise<MediaStream> {
-  if (config.source === 'system') {
-    // Chromium only exposes system-audio loopback through getDisplayMedia; the main process
-    // answers the request with a screen source + "loopback" audio. We discard the video.
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-    stream.getVideoTracks().forEach((track) => track.stop())
-    if (stream.getAudioTracks().length === 0) {
-      stream.getTracks().forEach((track) => track.stop())
-      throw new DOMException('no audio track', 'NotSupportedError')
-    }
-    // Chromium enables mic-style processing on the loopback track by default; it only
-    // degrades already-clean meeting audio. Best effort, some platforms ignore it.
-    await Promise.all(
-      stream.getAudioTracks().map((track) =>
-        track
-          .applyConstraints({
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false
-          })
-          .catch(() => undefined)
-      )
-    )
-    return stream
+async function acquireSystemOutputStream(): Promise<MediaStream> {
+  // Chromium only exposes system-audio loopback through getDisplayMedia; the main process
+  // answers the request with a screen source + "loopback" audio. We discard the video.
+  const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+  stream.getVideoTracks().forEach((track) => track.stop())
+  if (stream.getAudioTracks().length === 0) {
+    stream.getTracks().forEach((track) => track.stop())
+    throw new DOMException('no audio track', 'NotSupportedError')
   }
-
-  return navigator.mediaDevices.getUserMedia({
-    audio: {
-      deviceId: config.deviceId ? { exact: config.deviceId } : undefined,
-      channelCount: 1,
-      echoCancellation: false,
-      noiseSuppression: false,
-      autoGainControl: false
-    }
-  })
+  // Disable voice processing on the output track; it degrades already-clean meeting audio.
+  // Best effort: some platforms ignore these constraints.
+  await Promise.all(
+    stream.getAudioTracks().map((track) =>
+      track
+        .applyConstraints({
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        })
+        .catch(() => undefined)
+    )
+  )
+  return stream
 }
 
 function describeIpcError(error: unknown): string {
@@ -122,118 +96,146 @@ class Framer {
 export class AudioCaptureSession {
   private stopped = false
   private levelTick = 0
-  private release: () => void = () => undefined
+  private release: () => Promise<void> = async () => undefined
+  private stopPromise: Promise<void> | null = null
+  private unsubscribe: () => void = () => undefined
+  private removeAbort: () => void = () => undefined
+  private onPcm: ((samples: Float32Array) => void) | null = null
   private readonly segmenter: UtteranceSegmenter
 
   private constructor(
     config: VoiceCaptureConfig,
-    private readonly callbacks: CaptureCallbacks
+    private readonly callbacks: CaptureCallbacks,
+    private readonly id: string
   ) {
     this.segmenter = new UtteranceSegmenter(config.vad, FRAME_MS, callbacks.onSegment)
   }
 
-  private handleFrame(frame: Float32Array) {
+  private handleFrame(frame: Float32Array): void {
     if (this.stopped) return
     const db = this.segmenter.push(frame)
-    // Meter at ~10 Hz is plenty and keeps React renders cheap.
     this.levelTick = (this.levelTick + 1) % 5
     if (this.levelTick === 0) this.callbacks.onLevel(db)
   }
 
-  private handleEnded(reason: string) {
+  private handleEnded(reason: string): void {
     if (this.stopped) return
-    this.stop()
-    this.callbacks.onEnded(reason)
+    void this.stop().then(() => this.callbacks.onEnded(reason))
   }
 
   static async start(
     config: VoiceCaptureConfig,
-    callbacks: CaptureCallbacks
+    callbacks: CaptureCallbacks,
+    options: { id?: string; owner?: 'voice' | 'test'; signal?: AbortSignal } = {}
   ): Promise<AudioCaptureSession> {
-    const session = new AudioCaptureSession(config, callbacks)
-    if (config.source === 'system' && config.appId) {
-      await session.startApp(config.appId)
-    } else {
-      await session.startMedia(config)
+    // Reject stale/unsupported IPC payloads instead of silently changing their capture scope.
+    if (config.source !== 'system') throw new Error('仅支持系统或指定应用输出，请重新保存音频设置')
+    const id = options.id ?? crypto.randomUUID()
+    const session = new AudioCaptureSession(config, callbacks, id)
+    const onAbort = (): void => {
+      void session.stop()
     }
-    return session
-  }
-
-  /** A single application's audio, captured by a native helper in the main process. */
-  private async startApp(appId: string) {
-    let id: number
+    options.signal?.throwIfAborted()
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    session.removeAbort = () => options.signal?.removeEventListener('abort', onAbort)
+    session.unsubscribe = window.api.onVoiceAppAudio(
+      id,
+      (samples) => {
+        if (!session.stopped) session.onPcm?.(samples)
+      },
+      (reason) => session.handleEnded(reason)
+    )
+    options.signal?.throwIfAborted()
+    if (!(await window.api.voiceEnsureCapturePermission())) {
+      throw new Error(
+        '系统音频录制权限未开启：请在「系统设置 → 隐私与安全性 → 屏幕与系统音频录制」中允许 DreamCode 后重试'
+      )
+    }
     try {
-      id = await window.api.voiceAppCaptureStart(appId)
+      await window.api.voiceReserveCapture(id, options.owner ?? 'test')
+      if (session.stopped) throw new Error('音频采集启动已取消')
+      if (config.appId) await session.startApp(config.appId)
+      else await session.startMedia()
+      if (session.stopped) throw new Error('音频采集启动已取消')
+      return session
     } catch (error) {
+      await session.stop()
       throw new Error(describeIpcError(error))
     }
-    const framer = new Framer((frame) => this.handleFrame(frame))
-    const unsubscribe = window.api.onVoiceAppAudio(
-      id,
-      (samples) => framer.push(samples),
-      (reason) => this.handleEnded(`应用音频采集已结束：${reason}`)
-    )
-    this.release = () => {
-      unsubscribe()
-      void window.api.voiceAppCaptureStop(id)
-    }
   }
 
-  private async startMedia(config: VoiceCaptureConfig) {
+  private async startApp(appId: string): Promise<void> {
+    const framer = new Framer((frame) => this.handleFrame(frame))
+    this.onPcm = (samples) => framer.push(samples)
+    await window.api.voiceAppCaptureStart(appId, this.id)
+  }
+
+  private async startMedia(): Promise<void> {
     let stream: MediaStream
     try {
-      stream = await acquireStream(config)
+      stream = await acquireSystemOutputStream()
     } catch (error) {
-      throw new Error(describeMediaError(error, config.source))
+      throw new Error(describeMediaError(error))
     }
-
+    if (this.stopped) {
+      stream.getTracks().forEach((track) => track.stop())
+      throw new Error('音频采集启动已取消')
+    }
     const context = new AudioContext({ sampleRate: CAPTURE_SAMPLE_RATE })
+    let node: AudioWorkletNode | null = null
+    const release = async (): Promise<void> => {
+      if (node) {
+        node.port.onmessage = null
+        node.disconnect()
+      }
+      stream.getTracks().forEach((track) => track.stop())
+      await context.close().catch(() => undefined)
+    }
+    this.release = release
     try {
       await context.audioWorklet.addModule(WORKLET_URL)
-
+      if (this.stopped) throw new Error('音频采集启动已取消')
       const source = context.createMediaStreamSource(stream)
-      const node = new AudioWorkletNode(context, 'pcm-forwarder', {
+      node = new AudioWorkletNode(context, 'pcm-forwarder', {
         numberOfInputs: 1,
         numberOfOutputs: 1,
         channelCount: 1,
         channelCountMode: 'explicit',
         processorOptions: { frameSamples: FRAME_SAMPLES }
       })
-      // Keep the node pulled by the graph without making any sound.
       const mute = context.createGain()
       mute.gain.value = 0
       source.connect(node)
       node.connect(mute)
       mute.connect(context.destination)
       if (context.state === 'suspended') await context.resume()
-
+      if (this.stopped) throw new Error('音频采集启动已取消')
       node.port.onmessage = (event: MessageEvent<Float32Array>) => this.handleFrame(event.data)
       stream.getAudioTracks().forEach((track) => {
         track.addEventListener('ended', () =>
           this.handleEnded('音频源已结束（设备断开或共享被停止）')
         )
       })
-      this.release = () => {
-        node.port.onmessage = null
-        node.disconnect()
-        stream.getTracks().forEach((track) => track.stop())
-        void context.close().catch(() => undefined)
-      }
     } catch (error) {
-      stream.getTracks().forEach((track) => track.stop())
-      await context.close().catch(() => undefined)
-      throw error instanceof Error ? error : new Error(String(error))
+      await release()
+      throw error
     }
   }
 
-  /** Close the in-progress utterance so it gets transcribed right away. */
   flush(): void {
-    this.segmenter.flush()
+    if (!this.stopped) this.segmenter.flush()
   }
 
-  stop(): void {
-    if (this.stopped) return
+  stop(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise
     this.stopped = true
-    this.release()
+    this.unsubscribe()
+    this.removeAbort()
+    this.onPcm = null
+    this.stopPromise = (async () => {
+      await this.release()
+      await window.api.voiceReleaseCapture(this.id)
+    })()
+    return this.stopPromise
   }
 }

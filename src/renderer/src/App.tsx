@@ -10,7 +10,6 @@ import { VoiceCaptureController } from '@/voice/VoiceCaptureController'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useMemoryCardsStore } from '@/lib/store/memory-cards'
-import { getCloneableFields } from '@/lib/utils'
 
 export default function App() {
   const [initialized, setInitialized] = useState(false)
@@ -19,17 +18,26 @@ export default function App() {
   const { shortcuts } = useShortcutsStore()
 
   useEffect(() => {
-    window.api.getAppSettings().then((settings) => {
-      syncSettings({ ...settings, opacity: useSettingsStore.getState().opacity })
-      setInitialized(true)
-    })
-  }, [syncSettings])
-
-  useEffect(() => {
+    let disposed = false
+    let receivedNotification = false
     window.api.onAppSettingsChanged((settings) => {
-      syncSettings({ ...settings, opacity: useSettingsStore.getState().opacity })
+      receivedNotification = true
+      syncSettings(settings)
     })
+    window.api
+      .getAppSettings()
+      .then((settings) => {
+        if (disposed) return
+        if (!receivedNotification) syncSettings(settings)
+        setInitialized(true)
+      })
+      .catch((error: unknown) => {
+        if (disposed) return
+        console.error('settings_load_failed', error)
+        toast.error('设置加载失败，请重新打开应用')
+      })
     return () => {
+      disposed = true
       window.api.removeAppSettingsChangedListener()
     }
   }, [syncSettings])
@@ -42,12 +50,6 @@ export default function App() {
       window.api.removeGroupSwitchedListener()
     }
   }, [])
-
-  useEffect(() => {
-    if (initialized) {
-      window.api.updateAppSettings(getCloneableFields(settingsStore))
-    }
-  }, [initialized, settingsStore])
 
   // Apply opacity globally across all routes
   useEffect(() => {
@@ -73,13 +75,15 @@ export default function App() {
       <HashRouter>
         <ShortcutNavigator />
         <VoiceCaptureController />
-        <Routes>
-          <Route index element={<CoderPage />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="about" element={<AboutPage />} />
-          <Route path="memory-cards" element={<MemoryCardsPage />} />
-          <Route path="voice" element={<VoicePage />} />
-        </Routes>
+        {initialized && (
+          <Routes>
+            <Route index element={<CoderPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="memory-cards" element={<MemoryCardsPage />} />
+            <Route path="voice" element={<VoicePage />} />
+          </Routes>
+        )}
       </HashRouter>
 
       <Toaster />

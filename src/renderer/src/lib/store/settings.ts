@@ -31,8 +31,13 @@ interface Settings {
   voice: VoiceConfig
 }
 
+type AppearanceSettings = Pick<Settings, 'theme' | 'opacity' | 'fontSize'>
+type MainSettings = Omit<Settings, keyof AppearanceSettings>
+const LOCAL_APPEARANCE_KEYS = new Set(['theme', 'opacity', 'fontSize'])
+
 interface SettingsStore extends Settings {
-  updateSetting: <K extends keyof Settings>(key: K, value: Settings[K]) => void
+  updateSetting: <K extends keyof AppearanceSettings>(key: K, value: AppearanceSettings[K]) => void
+  saveSettings: (settings: Partial<MainSettings>) => Promise<void>
   syncSettings: (settings: Partial<Settings>) => void
 }
 
@@ -59,13 +64,27 @@ const defaultSettings: Settings = {
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...defaultSettings,
       updateSetting: (key, value) => {
-        set({ [key]: value })
+        if (get()[key] !== value) set({ [key]: value })
+      },
+      saveSettings: async (settings) => {
+        const saved = await window.api.updateAppSettings(settings)
+        get().syncSettings(saved)
       },
       syncSettings: (settings) => {
-        set(settings)
+        // Main notifications are inbound only. Keep local appearance and equal nested references.
+        const current = get()
+        const changes = Object.fromEntries(
+          Object.entries(settings).filter(
+            ([key, value]) =>
+              Object.hasOwn(defaultSettings, key) &&
+              !LOCAL_APPEARANCE_KEYS.has(key) &&
+              JSON.stringify(current[key as keyof Settings]) !== JSON.stringify(value)
+          )
+        )
+        if (Object.keys(changes).length) set(changes)
       }
     }),
     {

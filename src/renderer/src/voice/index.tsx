@@ -36,7 +36,8 @@ function formatTime(timestamp: number): string {
 export default function VoicePage() {
   const navigate = useNavigate()
   const { ignoreMouse, syncAppState } = useAppStore()
-  const { captureState, answering, segments, selection, exchanges, error, level } = useVoiceStore()
+  const { captureState, answering, segments, selection, exchanges, error, captureNotice, level } =
+    useVoiceStore()
   const thresholdDb = useSettingsStore((state) => state.voice.vad.thresholdDb)
   const contentRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
@@ -108,6 +109,11 @@ export default function VoicePage() {
             <span className="inline-flex items-center gap-1 text-xs text-red-500">
               <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
               监听中
+            </span>
+          )}
+          {isListening && captureNotice && (
+            <span className="text-xs text-amber-600 dark:text-amber-400" title={captureNotice}>
+              系统声音模式
             </span>
           )}
         </div>

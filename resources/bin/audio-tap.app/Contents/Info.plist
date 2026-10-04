@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>CFBundleDisplayName</key>
+    <string>DreamCode Audio Capture</string>
+    <key>CFBundleExecutable</key>
+    <string>audio-tap</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.dreamrec.dreamcode.audio-tap</string>
+    <key>CFBundleName</key>
+    <string>DreamCode Audio Capture</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAudioCaptureUsageDescription</key>
+    <string>仅采集所选 Chrome 应用播放的音频，用于语音助手。</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>需要采集所选应用的音频。</string>
+  </dict>
+</plist>

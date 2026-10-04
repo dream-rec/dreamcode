@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { Eye, EyeOff } from 'lucide-react'
+import { toast } from 'sonner'
 import { useSettingsStore } from '@/lib/store/settings'
 import { Button } from '@/components/ui/button'
 
 export function PrerequisitesChecker() {
   const navigate = useNavigate()
-  const { apiKey, apiBaseURL, apiProvider, updateSetting } = useSettingsStore()
+  const { apiKey, apiBaseURL, apiProvider, saveSettings } = useSettingsStore()
+  const [isSaving, setIsSaving] = useState(false)
   const [inputApiKey, setInputApiKey] = useState(apiKey)
   const [inputApiBaseURL, setInputApiBaseURL] = useState(apiBaseURL)
   const [inputProvider, setInputProvider] = useState(apiProvider)
@@ -18,13 +20,19 @@ export function PrerequisitesChecker() {
     setInputProvider(apiProvider)
   }, [apiKey, apiBaseURL, apiProvider])
 
-  const saveApiKey = () => {
-    updateSetting('apiProvider', inputProvider)
-    if (inputApiKey.trim()) {
-      updateSetting('apiKey', inputApiKey.trim())
-    }
-    if (inputApiBaseURL.trim()) {
-      updateSetting('apiBaseURL', inputApiBaseURL.trim())
+  const saveApiKey = async (): Promise<void> => {
+    if (isSaving) return
+    setIsSaving(true)
+    try {
+      await saveSettings({
+        apiProvider: inputProvider,
+        apiKey: inputApiKey.trim(),
+        apiBaseURL: inputApiBaseURL.trim()
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '设置保存失败，请重试')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -135,17 +143,14 @@ export function PrerequisitesChecker() {
         </div>
 
         <div className="flex gap-3">
-          <Button disabled={!inputApiKey.trim()} className="flex-1" onClick={saveApiKey}>
+          <Button
+            disabled={isSaving || !inputApiKey.trim()}
+            className="flex-1"
+            onClick={saveApiKey}
+          >
             开始使用
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              saveApiKey()
-              navigate('/settings')
-            }}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={() => navigate('/settings')} className="flex-1">
             更多设置
           </Button>
         </div>

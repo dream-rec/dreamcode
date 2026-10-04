@@ -12,7 +12,7 @@ export default function HelpPage() {
   const [hasUpdate, setHasUpdate] = useState(false)
   const [updateResult, setUpdateResult] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string>('')
-  const { autoCheckUpdate, updateSetting } = useSettingsStore()
+  const { autoCheckUpdate, saveSettings } = useSettingsStore()
 
   useEffect(() => {
     window.api.getAppVersion().then((v: string) => setAppVersion(v))
@@ -108,7 +108,13 @@ export default function HelpPage() {
                 <Checkbox
                   id="auto-check-update"
                   checked={autoCheckUpdate}
-                  onCheckedChange={(checked) => updateSetting('autoCheckUpdate', !!checked)}
+                  onCheckedChange={(checked) => {
+                    void saveSettings({ autoCheckUpdate: checked === true }).catch(
+                      (error: unknown) => {
+                        setUpdateResult(error instanceof Error ? error.message : '设置保存失败')
+                      }
+                    )
+                  }}
                 />
                 <label htmlFor="auto-check-update" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   启动时自动检查更新

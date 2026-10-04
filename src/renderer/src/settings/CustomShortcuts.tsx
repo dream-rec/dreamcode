@@ -21,11 +21,25 @@ export function CustomShortcuts() {
   const { providerGroups, promptGroups } = useSettingsStore()
   const [recordingAction, setRecordingAction] = useState<string | null>(null)
 
+  useEffect(() => {
+    void window.api.getShortcuts().then((registered) => {
+      const current = useShortcutsStore.getState().shortcuts
+      for (const [action, shortcut] of Object.entries(current)) {
+        const status = registered[action]?.status
+        if (status !== shortcut.status) updateShortcut(action, { ...shortcut, status })
+      }
+    })
+  }, [updateShortcut])
+
   const onShortcutChange = useCallback(
-    (action: string, key: string) => {
+    async (action: string, key: string) => {
       const newShortcut = { ...shortcuts[action], key }
       updateShortcut(action, newShortcut)
-      window.api.updateShortcuts([newShortcut])
+      await window.api.updateShortcuts([newShortcut])
+      const registered = await window.api.getShortcuts()
+      const status = registered[action]?.status
+      updateShortcut(action, { ...newShortcut, status })
+      if (status === 'failed') toast.error('快捷键注册失败，可能已被占用，请更换组合键')
     },
     [shortcuts, updateShortcut]
   )
@@ -74,12 +88,12 @@ export function CustomShortcuts() {
           <h3 className="text-sm text-gray-500 dark:text-gray-400">截图与AI</h3>
           <Shortcut
             label="截图"
-            description="截图并生成解题建议（会新开对话）"
+            description="新开题目，停止截图 2 秒后自动分析，不会弹出确认框"
             shortcut="takeScreenshot"
           />
           <Shortcut
             label="追加截图"
-            description="在当前对话中追加截图并生成解题建议，适用于长题目等场景"
+            description="连续截图合为一批，停止 2 秒后自动分析；已有回答时携带完整前文追问"
             shortcut="appendScreenshot"
           />
           <Shortcut
@@ -202,6 +216,9 @@ function Shortcut({
       <div className="flex gap-2 items-center">
         <label className="text-sm font-medium">{label}</label>
         {description && <p className="text-xs font-light">{description}</p>}
+        {shortcut.status === 'failed' && (
+          <span className="text-xs text-red-500">注册失败，请更换快捷键</span>
+        )}
       </div>
       <span
         className="cursor-pointer"

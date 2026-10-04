@@ -23,6 +23,7 @@ export const useVoiceStore = create<VoiceStore>()((set) => ({
   selection: null,
   exchanges: [],
   error: null,
+  captureNotice: null,
   level: -100,
   setSnapshot: (snapshot) => set(snapshot),
   appendAnswer: (id, chunk) =>

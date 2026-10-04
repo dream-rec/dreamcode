@@ -65,8 +65,8 @@ const getShortcutDescription = (action: string) => {
   const descriptionMap: Record<string, string> = {
     hideOrShowMainWindow: '隐藏/显示窗口',
     ignoreOrEnableMouse: '鼠标穿透(窗口对鼠标隐身)',
-    takeScreenshot: '截图并生成解题建议（会新开对话）',
-    appendScreenshot: '追加截图并生成解题建议',
+    takeScreenshot: '截图新开题目（停止截图 2 秒后自动分析）',
+    appendScreenshot: '追加截图（2 秒合批，已有回答时保留完整前文）',
     stopSolutionStream: '停止生成',
     toggleVoiceListening: '开始监听 / 停止监听并发送',
     voiceSendNow: '发送已识别内容并继续监听',

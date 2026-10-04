@@ -6,6 +6,13 @@ export type AppSettings = AppConfig & {
   opacity: number
 }
 
+let retireCapture: () => Promise<void> = async () => undefined
+let settingsWrite: Promise<unknown> = Promise.resolve()
+
+export function onCaptureTargetChange(handler: () => Promise<void>): void {
+  retireCapture = handler
+}
+
 export const settings: AppSettings = {
   ...loadConfig(),
   opacity: 0.8
@@ -76,41 +83,46 @@ export function activatePromptGroupAt(index: number): boolean {
 ipcMain.handle('getAppSettings', () => settings)
 
 ipcMain.handle('updateAppSettings', (_event, incoming: Partial<AppSettings>) => {
-  Object.assign(settings, incoming)
-
-  const activeProvider = settings.providerGroups.find(
-    (group) => group.id === settings.activeProviderGroupId
-  )
-  if (activeProvider) {
-    const providerConfig = {
-      apiProvider: settings.apiProvider,
-      apiBaseURL: settings.apiBaseURL,
-      apiKey: settings.apiKey,
-      extraHeaders: settings.extraHeaders,
-      model: settings.model,
-      proxyUrl: settings.proxyUrl
-    }
-    settings.providerGroups = settings.providerGroups.map((group) =>
-      group.id === activeProvider.id ? { ...group, ...providerConfig } : group
+  const update = async (): Promise<AppSettings> => {
+    const next = normalizeConfig({ ...settings, ...incoming })
+    if (next.voice.audioAppId !== settings.voice.audioAppId) await retireCapture()
+    Object.assign(settings, incoming)
+    const activeProvider = settings.providerGroups.find(
+      (group) => group.id === settings.activeProviderGroupId
     )
-  }
-
-  const activePrompt = settings.promptGroups.find(
-    (group) => group.id === settings.activePromptGroupId
-  )
-  if (activePrompt) {
-    const promptConfig = {
-      codeLanguage: settings.codeLanguage,
-      customPrompt: settings.customPrompt
+    if (activeProvider) {
+      const providerConfig = {
+        apiProvider: settings.apiProvider,
+        apiBaseURL: settings.apiBaseURL,
+        apiKey: settings.apiKey,
+        extraHeaders: settings.extraHeaders,
+        model: settings.model,
+        proxyUrl: settings.proxyUrl
+      }
+      settings.providerGroups = settings.providerGroups.map((group) =>
+        group.id === activeProvider.id ? { ...group, ...providerConfig } : group
+      )
     }
-    settings.promptGroups = settings.promptGroups.map((group) =>
-      group.id === activePrompt.id ? { ...group, ...promptConfig } : group
+    const activePrompt = settings.promptGroups.find(
+      (group) => group.id === settings.activePromptGroupId
     )
+    if (activePrompt) {
+      const promptConfig = {
+        codeLanguage: settings.codeLanguage,
+        customPrompt: settings.customPrompt
+      }
+      settings.promptGroups = settings.promptGroups.map((group) =>
+        group.id === activePrompt.id ? { ...group, ...promptConfig } : group
+      )
+    }
+    Object.assign(settings, normalizeConfig(settings))
+    saveCurrentSettings()
+    notifySettingsChanged()
+    return settings
   }
-
-  const normalized = normalizeConfig(settings)
-  Object.assign(settings, normalized)
-  saveCurrentSettings()
+  const result = settingsWrite.then(update)
+  settingsWrite = result.catch(() => undefined)
+  return result
 })
 
 ipcMain.handle('activateProviderGroup', (_event, id: string) => activateProviderGroup(id))

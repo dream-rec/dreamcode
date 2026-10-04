@@ -25,7 +25,7 @@ export default defineConfig({
                   dest: 'bin'
                 },
                 {
-                  src: 'resources/bin/audio-tap',
+                  src: 'resources/bin/audio-tap.app',
                   dest: 'bin'
                 }
               ]

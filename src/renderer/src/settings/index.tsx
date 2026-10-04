@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { ArrowLeft, Keyboard, Palette, Save, Shield } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useSettingsStore } from '@/lib/store/settings'
-import { getCloneableFields } from '@/lib/utils'
 import { CustomShortcuts, ResetDefaultShortcuts } from './CustomShortcuts'
 import { GroupSettings } from './GroupSettings'
 import { VoiceSettings } from './VoiceSettings'
@@ -23,19 +22,11 @@ export default function SettingsPage() {
   const [fontSize, setFontSize] = useState(settingsStore.fontSize)
   const [voice, setVoice] = useState(settingsStore.voice)
 
-  useEffect(() => {
-    setProviderGroups(settingsStore.providerGroups)
-    setPromptGroups(settingsStore.promptGroups)
-    setActiveProviderGroupId(settingsStore.activeProviderGroupId)
-    setActivePromptGroupId(settingsStore.activePromptGroupId)
-    setVoice(settingsStore.voice)
-  }, [
-    settingsStore.providerGroups,
-    settingsStore.promptGroups,
-    settingsStore.activeProviderGroupId,
-    settingsStore.activePromptGroupId,
-    settingsStore.voice
-  ])
+  const [isSaving, setIsSaving] = useState(false)
+  const saving = useRef(false)
+
+  // Drafts belong to this visit, not to each incoming main-process notification.
+  // App waits for initial settings before mounting routes.
 
   useEffect(() => {
     document.body.style.opacity = opacity.toString()
@@ -47,7 +38,7 @@ export default function SettingsPage() {
     }
   }, [])
 
-  const commitSettings = () => {
+  const commitSettings = async (): Promise<void> => {
     const activeProvider =
       providerGroups.find((group) => group.id === activeProviderGroupId) ?? providerGroups[0]
     const activePrompt =
@@ -67,17 +58,26 @@ export default function SettingsPage() {
       promptGroups,
       activeProviderGroupId: activeProvider.id,
       activePromptGroupId: activePrompt.id,
-      voice,
-      opacity,
-      fontSize
+      voice
     }
-    settingsStore.syncSettings(newSettings)
-    window.api.updateAppSettings(getCloneableFields({ ...settingsStore, ...newSettings }))
+    await settingsStore.saveSettings(newSettings)
+    settingsStore.updateSetting('opacity', opacity)
+    settingsStore.updateSetting('fontSize', fontSize)
   }
 
-  const handleSave = () => {
-    commitSettings()
-    toast.success('设置已保存')
+  const handleSave = async (): Promise<void> => {
+    if (saving.current) return
+    saving.current = true
+    setIsSaving(true)
+    try {
+      await commitSettings()
+      toast.success('设置已保存')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '设置保存失败，请重试')
+    } finally {
+      saving.current = false
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -100,6 +100,7 @@ export default function SettingsPage() {
             size="icon"
             className="size-7 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
             onClick={handleSave}
+            disabled={isSaving}
             title="保存设置"
           >
             <Save className="h-4 w-4" />
@@ -187,7 +188,11 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex justify-center pb-4">
-          <Button className="w-40 h-10 text-sm font-medium rounded-lg" onClick={handleSave}>
+          <Button
+            className="w-40 h-10 text-sm font-medium rounded-lg"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
             <Save className="h-4 w-4 mr-2" />
             保存设置
           </Button>

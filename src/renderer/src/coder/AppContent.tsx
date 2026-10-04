@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useSolutionStore } from '@/lib/store/solution'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
@@ -11,76 +11,28 @@ export function AppContent() {
     screenshotData,
     solutionChunks,
     errorMessage,
-    setScreenshotData,
-    setIsLoading,
-    addSolutionChunk,
     setErrorMessage,
-    clearSolution
+    screenshotSnapshot,
+    syncScreenshot
   } = useSolutionStore()
-
-  const [recentScreenshots, setRecentScreenshots] = useState<string[]>([])
-
-  useEffect(() => {
-    // Listen for screenshot events (latest)
-    window.api.onScreenshotTaken((data: string) => {
-      setScreenshotData(data)
-    })
-
-    // Listen for screenshots-updated events (gallery)
-    window.api.onScreenshotsUpdated((screenshots: string[]) => {
-      setRecentScreenshots(screenshots)
-    })
-
-    // New session clear (pictures + answers)
-    window.api.onSolutionClear(() => {
-      clearSolution()
-      setRecentScreenshots([])
-      setScreenshotData(null)
-      setErrorMessage(null)
-    })
-
-    // Listen for solution chunks
-    window.api.onSolutionChunk((chunk: string) => {
-      addSolutionChunk(chunk)
-    })
-
-    // AI loading
-    window.api.onAiLoadingStart(() => {
-      setIsLoading(true)
-      setErrorMessage(null) // Clear error when new request starts
-    })
-    window.api.onAiLoadingEnd(() => {
-      setIsLoading(false)
-    })
-
-    // Cleanup listeners on unmount
-    return () => {
-      window.api.removeScreenshotListener()
-      window.api.removeScreenshotsUpdatedListener()
-      window.api.removeSolutionChunkListener()
-      window.api.removeAiLoadingStartListener()
-      window.api.removeAiLoadingEndListener()
-      window.api.removeSolutionClearListener()
-    }
-  }, [setScreenshotData, clearSolution, setIsLoading, addSolutionChunk, setErrorMessage])
+  const recentScreenshots = screenshotSnapshot?.recentScreenshots ?? []
 
   useEffect(() => {
-    window.api.onSolutionComplete(() => {
-      setIsLoading(false)
-    })
-    window.api.onSolutionStopped(() => {
-      setIsLoading(false)
-    })
-    window.api.onSolutionError((message: string) => {
-      setIsLoading(false)
-      setErrorMessage(message)
-    })
+    let active = true
+    const unsubscribe = window.api.onScreenshotState(syncScreenshot)
+    window.api
+      .getScreenshotState()
+      .then((snapshot) => {
+        if (active) syncScreenshot(snapshot)
+      })
+      .catch((error: unknown) => {
+        if (active) setErrorMessage(String(error))
+      })
     return () => {
-      window.api.removeSolutionCompleteListener()
-      window.api.removeSolutionStoppedListener()
-      window.api.removeSolutionErrorListener()
+      active = false
+      unsubscribe()
     }
-  }, [setIsLoading, setErrorMessage])
+  }, [syncScreenshot, setErrorMessage])
 
   useEffect(() => {
     window.api.onScrollPageUp(() => {
@@ -129,7 +81,7 @@ export function AppContent() {
             />
           </svg>
           <div className="flex-1 min-w-0">
-            <p className="text-red-400 font-medium text-sm">API 调用失败</p>
+            <p className="text-red-400 font-medium text-sm">截图与解答提示</p>
             <p className="text-red-300/80 text-sm mt-0.5 break-words">{errorMessage}</p>
           </div>
           <button
@@ -148,6 +100,21 @@ export function AppContent() {
           </button>
         </div>
       )}
+
+      {screenshotSnapshot &&
+        (screenshotSnapshot.pendingCount > 0 ||
+          screenshotSnapshot.busy ||
+          screenshotSnapshot.capturing) && (
+          <p role="status" className="mb-4 text-sm text-gray-500 dark:text-gray-400">
+            {screenshotSnapshot.capturing
+              ? '截图中…'
+              : screenshotSnapshot.retry
+                ? '输入已保留，追加截图可继续分析，或新开题目'
+                : screenshotSnapshot.busy
+                  ? '正在分析… 新截图会在本次回答结束后自动分析'
+                  : '等待连续截图… 停止截图 2 秒后自动分析'}
+          </p>
+        )}
 
       {/* Screenshot Gallery */}
       {recentScreenshots.length > 0 ? (
@@ -191,6 +158,11 @@ function ShortcutTip() {
           className="mx-1 font-bold text-black dark:text-white"
         />
         抓取屏幕进行分析
+      </div>
+      <div className="text-sm">
+        长题目先按{' '}
+        <ShortcutRenderer shortcut={shortcuts.appendScreenshot.key} className="inline-block" />{' '}
+        追加截图，停止截图 2 秒后自动分析；已有回答时自动保留完整前文追问
       </div>
       <div className="text-sm">
         或按

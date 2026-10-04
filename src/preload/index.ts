@@ -1,3 +1,4 @@
+import type { ScreenshotSnapshot } from '../shared/screenshot'
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
@@ -193,6 +194,13 @@ const api = {
     ipcRenderer.removeAllListeners('solution-clear')
   },
 
+  getScreenshotState: (): Promise<ScreenshotSnapshot> => ipcRenderer.invoke('screenshot:getState'),
+  onScreenshotState: (callback: (snapshot: ScreenshotSnapshot) => void) => {
+    const listener = (_event: unknown, snapshot: ScreenshotSnapshot): void => callback(snapshot)
+    ipcRenderer.on('screenshot-state', listener)
+    return () => ipcRenderer.removeListener('screenshot-state', listener)
+  },
+
   // ---- Voice assistant ----
   voiceGetSnapshot: (): Promise<VoiceSnapshot> => ipcRenderer.invoke('voice:getSnapshot'),
   voiceToggleListening: () => ipcRenderer.invoke('voice:toggleListening'),
@@ -208,20 +216,28 @@ const api = {
   voiceSendSelected: () => ipcRenderer.invoke('voice:sendSelected'),
   // Per-application audio (native helper in main, PCM streamed back)
   voiceListAudioApps: (): Promise<AudioApp[]> => ipcRenderer.invoke('voice:listAudioApps'),
-  /** Resolves with a capture id once the helper is running; PCM arrives via onVoiceAppAudio. */
-  voiceAppCaptureStart: (appId: string): Promise<number> =>
-    ipcRenderer.invoke('voice:appCaptureStart', appId),
-  voiceAppCaptureStop: (id: number) => ipcRenderer.invoke('voice:appCaptureStop', id),
+  /** macOS 音频录制授权检查：未授权时主进程会弹窗引导，返回 false 表示不应开始采集。 */
+  voiceEnsureCapturePermission: (): Promise<boolean> =>
+    ipcRenderer.invoke('voice:ensureCapturePermission'),
+  /** Starts the helper; `onVoiceAppAudio` receives the session's PCM and end events. */
+  voiceReserveCapture: (id: string, owner: 'voice' | 'test'): Promise<void> =>
+    ipcRenderer.invoke('voice:reserveCapture', id, owner),
+  voiceReleaseCapture: (id: string): Promise<void> =>
+    ipcRenderer.invoke('voice:releaseCapture', id),
+  voiceAppCaptureStart: (appId: string, id: string): Promise<void> =>
+    ipcRenderer.invoke('voice:appCaptureStart', appId, id),
+  voiceAppCaptureStop: (id: string): Promise<void> =>
+    ipcRenderer.invoke('voice:appCaptureStop', id),
   /** Subscribes to one capture's PCM / end events; returns an unsubscribe function. */
   onVoiceAppAudio: (
-    id: number,
+    id: string,
     onPcm: (samples: Float32Array) => void,
     onEnded: (reason: string) => void
   ) => {
-    const pcmListener = (_event: unknown, payload: { id: number; samples: Float32Array }) => {
+    const pcmListener = (_event: unknown, payload: { id: string; samples: Float32Array }) => {
       if (payload.id === id) onPcm(payload.samples)
     }
-    const endedListener = (_event: unknown, payload: { id: number; reason: string }) => {
+    const endedListener = (_event: unknown, payload: { id: string; reason: string }) => {
       if (payload.id === id) onEnded(payload.reason)
     }
     ipcRenderer.on('voice-app-pcm', pcmListener)
@@ -232,10 +248,13 @@ const api = {
     }
   },
   // Capture controller → main acknowledgements
-  voiceCaptureStarted: () => ipcRenderer.invoke('voice:captureStarted'),
-  voiceCaptureStopped: (requestId: string) => ipcRenderer.invoke('voice:captureStopped', requestId),
-  voiceFlushed: (requestId: string) => ipcRenderer.invoke('voice:flushed', requestId),
-  voiceCaptureError: (message: string) => ipcRenderer.invoke('voice:captureError', message),
+  voiceCaptureStarted: (id: string) => ipcRenderer.invoke('voice:captureStarted', id),
+  voiceCaptureStopped: (id: string, requestId: string) =>
+    ipcRenderer.invoke('voice:captureStopped', id, requestId),
+  voiceFlushed: (id: string, requestId: string) =>
+    ipcRenderer.invoke('voice:flushed', id, requestId),
+  voiceCaptureError: (id: string, message: string) =>
+    ipcRenderer.invoke('voice:captureError', id, message),
   voicePushSegment: (payload: VoiceSegmentPayload) =>
     ipcRenderer.invoke('voice:pushSegment', payload),
   voiceTestTranscribe: (config: VoiceConfig, wav: Uint8Array): Promise<string> =>

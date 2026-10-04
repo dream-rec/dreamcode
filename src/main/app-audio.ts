@@ -1,14 +1,15 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { app } from 'electron'
+import { app, dialog, shell, systemPreferences } from 'electron'
 import type { AudioApp } from '../shared/voice'
 
 /**
  * Per-application audio capture ("only the meeting app, not the whole system").
  *
  * Chromium can only loop back the entire system mix, so this goes through small native helpers:
- *   - macOS 13+: resources/bin/audio-tap (ScreenCaptureKit, see scripts/audio-tap.swift)
+ *   - macOS 13+: resources/bin/audio-tap.app (ScreenCaptureKit for legacy targets;
+ *     stable Chrome on 14.4+ uses positive Core Audio process taps, see scripts/chrome-audio.swift)
  *   - Windows 10 2004+: application-loopback's ApplicationLoopback.exe (WASAPI process loopback,
  *     captures the target process tree), 48 kHz stereo PCM16 on stdout.
  * Both are normalised to 16 kHz mono float32, the rate the renderer VAD works at.
@@ -22,8 +23,60 @@ const PAD_TICK_MS = 50
 const PAD_LAG_MS = 150
 const START_TIMEOUT_MS = 8000
 
+/**
+ * 现场诊断默认关闭：`DREAMCODE_AUDIO_DIAG=1 npm run dev` 时把采集链路事实打到开发终端，
+ * 用来区分「helper 没选中成员 / 没有 IO 回调 / 收到全零 / 应用侧丢失」。
+ * 只统计计数与峰值，不保存、不上传任何音频内容，也不改变采集行为。
+ */
+const diagEnabled = process.env.DREAMCODE_AUDIO_DIAG === '1'
+
+function diag(message: string, detail?: unknown): void {
+  if (!diagEnabled) return
+  console.log(`[audio-diag] ${message}`, detail === undefined ? '' : detail)
+}
+
 export function isAppCaptureSupported(): boolean {
   return process.platform === 'darwin' || (process.platform === 'win32' && process.arch === 'x64')
+}
+
+const AUDIO_CAPTURE_SETTINGS =
+  'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
+let permissionDialogShown = false
+
+/**
+ * macOS 上应用与系统输出采集都受「屏幕与系统音频录制」授权控制；未授权时系统只会给出静音。
+ * 因此开始监听前先检查并引导用户授权，而不是让用户面对“没有声音”。
+ * `not-determined` 不算未授权：首次使用时系统自己会弹授权对话框。
+ */
+async function promptCapturePermission(): Promise<void> {
+  if (process.platform !== 'darwin') return
+  const status = systemPreferences.getMediaAccessStatus('screen')
+  if (status !== 'denied' && status !== 'restricted') return
+  if (permissionDialogShown) return
+  permissionDialogShown = true
+  const mainWindow = global.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    title: '需要系统音频录制权限',
+    message: 'DreamCode 无法采集应用或系统声音',
+    detail:
+      '请在“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”中允许 DreamCode（使用 npm run dev 时请允许 Electron 与 DreamCode Audio Capture），然后完全退出并重新启动 DreamCode。\n\n未授权时监听会一直没有声音。',
+    buttons: ['打开系统设置', '取消'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  })
+  if (response === 0) await shell.openExternal(AUDIO_CAPTURE_SETTINGS)
+}
+
+/** 采集前的权限闸门：明确未授权时弹窗引导并拒绝启动。 */
+export async function ensureCapturePermission(): Promise<boolean> {
+  if (process.platform !== 'darwin') return true
+  const status = systemPreferences.getMediaAccessStatus('screen')
+  if (status !== 'denied' && status !== 'restricted') return true
+  await promptCapturePermission()
+  return false
 }
 
 function unpackedPath(path: string): string {
@@ -33,8 +86,8 @@ function unpackedPath(path: string): string {
 
 function getMacHelperPath(): string {
   return app.isPackaged
-    ? join(process.resourcesPath, 'bin', 'audio-tap')
-    : join(__dirname, 'bin', 'audio-tap')
+    ? join(process.resourcesPath, 'bin', 'audio-tap.app', 'Contents', 'MacOS', 'audio-tap')
+    : join(__dirname, 'bin', 'audio-tap.app', 'Contents', 'MacOS', 'audio-tap')
 }
 
 function getWindowsLoopbackPath(): string {
@@ -75,7 +128,7 @@ async function listMacApps(): Promise<AudioApp[]> {
     const stderr = (error as { stderr?: string }).stderr ?? ''
     throw new Error(parseHelperError(stderr) ?? `读取应用列表失败：${(error as Error).message}`)
   }
-  if (!stdout.trim()) throw new Error('应用列表为空，请确认已授予「屏幕录制」权限后重试')
+  if (!stdout.trim()) throw new Error('应用列表返回为空，请确认目标应用正在运行后重试')
   try {
     const apps = JSON.parse(stdout) as AudioApp[]
     return apps.filter((item) => item.pid !== process.pid && item.id !== 'com.dreamrec.dreamcode')
@@ -233,14 +286,73 @@ class SilencePadder {
   }
 }
 
+/**
+ * 只统计 helper 原始输出（SilencePadder 补零不算）的字节数、峰值与 RMS，每秒汇报一次。
+ * 补零会让 VAD 收口，但补零帧不是真实采集，所以统计必须挂在 resampler 之前。
+ */
+class PcmMeter {
+  private bytes = 0
+  private samples = 0
+  private peak = 0
+  private square = 0
+  private windowSamples = 0
+  private windowPeak = 0
+  private windowSquare = 0
+  private reportedAt = Date.now()
+
+  push(values: Float32Array): void {
+    if (!diagEnabled || !values.length) return
+    this.bytes += values.length * 4
+    this.samples += values.length
+    this.windowSamples += values.length
+    for (const value of values) {
+      const magnitude = Math.abs(value)
+      if (magnitude > this.windowPeak) this.windowPeak = magnitude
+      if (magnitude > this.peak) this.peak = magnitude
+      this.square += value * value
+      this.windowSquare += value * value
+    }
+    if (Date.now() - this.reportedAt < 1000) return
+    const seconds = (Date.now() - this.reportedAt) / 1000
+    diag('pcm', {
+      windowSeconds: Number(seconds.toFixed(2)),
+      windowSamples: this.windowSamples,
+      windowPeak: Number(this.windowPeak.toFixed(5)),
+      windowRms: Number(Math.sqrt(this.windowSquare / Math.max(1, this.windowSamples)).toFixed(5)),
+      totalSamples: this.samples,
+      totalBytes: this.bytes,
+      totalPeak: Number(this.peak.toFixed(5))
+    })
+    this.reportedAt = Date.now()
+    this.windowSamples = 0
+    this.windowPeak = 0
+    this.windowSquare = 0
+  }
+
+  finish(): void {
+    if (!diagEnabled) return
+    diag('pcm summary', {
+      totalSamples: this.samples,
+      totalBytes: this.bytes,
+      totalPeak: Number(this.peak.toFixed(5)),
+      totalRms: Number(Math.sqrt(this.square / Math.max(1, this.samples)).toFixed(5))
+    })
+  }
+}
+
 export interface AppCaptureHandlers {
   onPcm: (samples: Float32Array) => void
   /** The helper exited on its own (app quit, permission revoked, crash). */
   onEnded: (reason: string) => void
+  /**
+   * The helper switched backends mid-stream: Chrome's VoiceProcessing duplex state hides
+   * app-scoped audio, so it falls back once to whole-system output capture.
+   */
+  onFallback?: (info: { mode: string; reason: string }) => void
 }
 
 export interface AppCapture {
-  stop: () => void
+  stop: () => Promise<void>
 }
 
 function float32FromBytes(bytes: Buffer): Float32Array {
@@ -282,104 +394,145 @@ app.on('will-quit', () => {
   activeChildren.clear()
 })
 
-/** Starts capturing one application's audio; resolves once audio is flowing (or fails). */
+/** Starts application capture. Chrome's `started` means armed, not audible or permission-confirmed. */
 export async function startAppCapture(
   appId: string,
-  handlers: AppCaptureHandlers
+  handlers: AppCaptureHandlers,
+  signal?: AbortSignal
 ): Promise<AppCapture> {
   if (!isAppCaptureSupported()) throw new Error('当前系统不支持按应用采集音频')
-
+  signal?.throwIfAborted()
   const isMac = process.platform === 'darwin'
   const command = isMac ? getMacHelperPath() : getWindowsLoopbackPath()
   const args = isMac ? ['capture', appId] : [String(await resolveWindowsPid(appId))]
-
+  signal?.throwIfAborted()
   const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+  diag('spawn', { appId, command, args, packaged: app.isPackaged, pid: child.pid })
   activeChildren.add(child)
-
-  const padder = new SilencePadder(handlers.onPcm)
+  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+  const padder = new SilencePadder((samples) => {
+    if (!signal?.aborted) handlers.onPcm(samples)
+  })
+  const meter = isMac ? new PcmMeter() : null
   let stopped = false
   let started = false
   let stderrText = ''
-
-  const cleanup = () => {
-    padder.stop()
-    activeChildren.delete(child)
-  }
-
-  const stop = () => {
-    if (stopped) return
+  let stopPromise: Promise<void> | null = null
+  const stop = (): Promise<void> => {
+    if (stopPromise) return stopPromise
     stopped = true
-    cleanup()
+    diag('stop', { appId })
+    meter?.finish()
+    padder.stop()
     child.stdin?.end()
     child.kill()
+    const killTimer = setTimeout(() => child.kill('SIGKILL'), 1000)
+    stopPromise = closed.finally(() => {
+      clearTimeout(killTimer)
+      activeChildren.delete(child)
+    })
+    return stopPromise
   }
 
   return new Promise<AppCapture>((resolve, reject) => {
-    const settleStarted = () => {
-      if (started) return
+    const settleStarted = (): void => {
+      if (started || stopped) return
       started = true
       clearTimeout(startTimer)
       resolve({ stop })
     }
-    const failStart = (message: string) => {
+    const failStart = (message: string): void => {
       if (started) return
       started = true
       clearTimeout(startTimer)
-      stop()
-      reject(new Error(message))
+      void stop().then(() => reject(new Error(message)))
     }
-
-    const startTimer = setTimeout(() => {
-      if (isMac) {
-        failStart('应用音频采集启动超时（请检查「屏幕录制」权限）')
-      } else {
-        // The Windows helper prints nothing until the app actually plays audio.
-        settleStarted()
-      }
-    }, START_TIMEOUT_MS)
+    const onAbort = (): void => {
+      if (!started) failStart('音频采集启动已取消')
+      else void stop()
+    }
+    const startTimer = setTimeout(
+      () => {
+        if (isMac) {
+          void promptCapturePermission()
+          failStart('应用音频采集启动超时（请检查「屏幕与系统音频录制」权限）')
+        } else settleStarted()
+      },
+      isMac ? 45_000 : START_TIMEOUT_MS
+    )
+    signal?.addEventListener('abort', onAbort, { once: true })
+    void closed.then(() => {
+      clearTimeout(startTimer)
+      signal?.removeEventListener('abort', onAbort)
+      padder.stop()
+      activeChildren.delete(child)
+    })
 
     if (isMac) {
-      // audio-tap reports its format before the first samples; default matches what we request.
       let resampler = new MonoResampler(APP_CAPTURE_SAMPLE_RATE, 1)
-      const read = createFrameReader(4, (bytes) =>
-        padder.push(resampler.push(float32FromBytes(bytes)))
-      )
+      const read = createFrameReader(4, (bytes) => {
+        const samples = float32FromBytes(bytes)
+        meter?.push(samples)
+        if (!stopped) padder.push(resampler.push(samples))
+      })
       child.stdout.on('data', read)
       child.stderr.setEncoding('utf8')
+      let pendingLine = ''
       child.stderr.on('data', (text: string) => {
-        stderrText += text
-        for (const line of text.split('\n')) {
-          if (!line.trim()) continue
+        stderrText = (stderrText + text).slice(-32_768)
+        pendingLine += text
+        const lines = pendingLine.split('\n')
+        pendingLine = lines.pop() ?? ''
+        for (const line of lines) {
           try {
             const event = JSON.parse(line)
-            if (event.event === 'started') settleStarted()
+            if (event.event === 'started') {
+              diag('helper armed', { waiting: event.waiting, backend: event.backend })
+              settleStarted()
+            }
             if (event.event === 'format') {
+              diag('helper format', { sampleRate: event.sampleRate, channels: event.channels })
               resampler = new MonoResampler(Number(event.sampleRate), Number(event.channels) || 1)
             }
-            if (event.event === 'error') failStart(String(event.message))
+            if (event.event === 'fallback') {
+              diag('helper fallback', { mode: event.mode, reason: event.reason })
+              handlers.onFallback?.({
+                mode: typeof event.mode === 'string' ? event.mode : 'unknown',
+                reason: typeof event.reason === 'string' ? event.reason : ''
+              })
+            }
+            if (event.event === 'diagnostic') {
+              diag('helper', event)
+            }
+            if (event.event === 'error') {
+              diag('helper error', { message: event.message })
+              if (!started) failStart(String(event.message))
+              else if (!stopped) {
+                void stop()
+                handlers.onEnded(String(event.message))
+              }
+            }
           } catch {
-            // ignore framework log noise
+            // Framework diagnostics may share stderr with the JSON protocol.
           }
         }
+        if (pendingLine.length > 32_768) pendingLine = ''
       })
     } else {
-      // Windows helper: PCM16 stereo 48 kHz; silent packets are dropped (the padder fills them).
       const resampler = new MonoResampler(48000, 2)
       let sniffed = false
-      const read = createFrameReader(4, (bytes) =>
-        padder.push(resampler.push(float32FromPcm16(bytes)))
-      )
+      const read = createFrameReader(4, (bytes) => {
+        if (!stopped) padder.push(resampler.push(float32FromPcm16(bytes)))
+      })
       child.stdout.on('data', (chunk: Buffer) => {
         if (!sniffed) {
           sniffed = true
-          // Start failures are reported as text on stdout, not as an exit code.
           if (chunk.subarray(0, 23).toString('latin1').startsWith('Failed to start capture')) {
             const message = `应用音频采集启动失败：${chunk.toString('utf8').trim()}`
-            if (started) {
-              stop()
+            if (!started) failStart(message)
+            else if (!stopped) {
+              void stop()
               handlers.onEnded(message)
-            } else {
-              failStart(message)
             }
             return
           }
@@ -388,30 +541,31 @@ export async function startAppCapture(
       })
       child.stderr.setEncoding('utf8')
       child.stderr.on('data', (text: string) => {
-        stderrText += text
+        stderrText = (stderrText + text).slice(-32_768)
       })
-      // Give an immediate failure (bad pid, missing exe) a moment to surface before resolving.
-      setTimeout(() => {
-        if (!stopped) settleStarted()
-      }, 500)
+      const readyTimer = setTimeout(settleStarted, 500)
+      void closed.then(() => clearTimeout(readyTimer))
     }
-
     child.on('error', (error) => {
-      failStart(`无法启动音频采集程序：${error.message}`)
+      diag('helper spawn error', { message: error.message })
+      if (!started) failStart(`无法启动音频采集程序：${error.message}`)
+      else if (!stopped) {
+        void stop()
+        handlers.onEnded(error.message)
+      }
     })
-
     child.on('exit', (code) => {
-      cleanup()
+      diag('helper exit', { code, stopped, stderr: stderrText.trim().slice(-2000) })
       if (stopped) return
-      stopped = true
       const reason =
         parseHelperError(stderrText) ??
         (code === 0 ? '被监听的应用已退出' : `音频采集程序异常退出（${code}）`)
-      if (!started) {
-        failStart(reason)
-      } else {
+      if (!started) failStart(reason)
+      else {
+        stopped = true
         handlers.onEnded(reason)
       }
     })
+    if (signal?.aborted) onAbort()
   })
 }

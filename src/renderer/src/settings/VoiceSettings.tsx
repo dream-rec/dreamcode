@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AudioLines, Eye, EyeOff, Mic, RefreshCw, Square } from 'lucide-react'
+import { AudioLines, Check, Eye, EyeOff, RefreshCw, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
@@ -12,7 +12,6 @@ import { encodeWav, floatToPcm16 } from '@/voice/audio/wav'
 import {
   VOICE_STT_PROVIDERS,
   type ProviderConfig,
-  type VoiceAudioSource,
   type VoiceConfig,
   type VoiceSttProvider
 } from '../../../shared/settings'
@@ -23,7 +22,7 @@ interface VoiceSettingsProps {
   onChange: (next: VoiceConfig) => void
 }
 
-/** Per-app capture needs a native helper: ScreenCaptureKit (macOS 13+) or WASAPI (Win10 2004+). */
+/** Per-app output capture requires a native helper (macOS 13+ or Win10 2004+). */
 const APP_CAPTURE_SUPPORTED = isMac || isWindows
 
 const selectClassName =
@@ -41,7 +40,6 @@ type TestLine = { id: number; status: 'pending' | 'done' | 'error'; text: string
 export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
   const [showSttKey, setShowSttKey] = useState(false)
   const [showLlmKey, setShowLlmKey] = useState(false)
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
   const [apps, setApps] = useState<AudioApp[]>([])
   const [appsLoading, setAppsLoading] = useState(false)
   const [appsError, setAppsError] = useState<string | null>(null)
@@ -54,37 +52,24 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
   const updateLlm = (changes: Partial<ProviderConfig>) =>
     update({ llm: { ...value.llm, ...changes } })
 
-  const refreshDevices = useCallback(async (requestPermission: boolean) => {
-    try {
-      if (requestPermission) {
-        // Labels are only exposed after the page has been granted microphone access once.
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        stream.getTracks().forEach((track) => track.stop())
-      }
-      const all = await navigator.mediaDevices.enumerateDevices()
-      setDevices(all.filter((device) => device.kind === 'audioinput'))
-    } catch (error) {
-      console.warn('enumerateDevices failed:', error)
-    }
-  }, [])
-
-  const refreshApps = useCallback(async () => {
-    if (!APP_CAPTURE_SUPPORTED) return
+  const refreshApps = useCallback(async (): Promise<boolean> => {
+    if (!APP_CAPTURE_SUPPORTED) return false
     setAppsLoading(true)
     setAppsError(null)
     try {
       setApps(await window.api.voiceListAudioApps())
+      return true
     } catch (error) {
       setAppsError(describeIpcError(error))
+      return false
     } finally {
       setAppsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void refreshDevices(false)
     void refreshApps()
-  }, [refreshDevices, refreshApps])
+  }, [refreshApps])
 
   const selectApp = (appId: string) => {
     const app = apps.find((item) => item.id === appId)
@@ -129,14 +114,11 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
       <section className="space-y-3">
         <h3 className="text-sm font-medium">音频来源</h3>
         <div className="rounded-md border border-gray-300 dark:border-gray-600 divide-y divide-gray-200 dark:divide-gray-700 overflow-hidden">
-          <SourceRow
-            source="system"
-            label="系统音频"
-            active={value.audioSource === 'system'}
-            onActivate={(audioSource) => update({ audioSource })}
+          <OutputSourceRow
             control={
               <>
                 <select
+                  id="voice-output-target"
                   className={selectClassName}
                   value={value.audioAppId}
                   disabled={!APP_CAPTURE_SUPPORTED}
@@ -158,63 +140,11 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
                   title="刷新正在运行的软件列表"
                   loading={appsLoading}
                   disabled={!APP_CAPTURE_SUPPORTED}
-                  onClick={() => {
-                    update({ audioSource: 'system' })
-                    void refreshApps()
-                  }}
+                  onClick={refreshApps}
                 />
               </>
-            }
-            hint={
-              value.audioAppId ? (
-                <>
-                  只采集「{value.audioAppName || value.audioAppId}
-                  」播放的声音，其他软件的提示音、音乐不会混进来。开始监听前请先打开该软件。
-                  {isMac
-                    ? ' 需要 macOS 13 及以上并已授予「屏幕录制」权限。'
-                    : ' 需要 Windows 10 2004 及以上。'}
-                </>
-              ) : (
-                <>
-                  采集整个系统正在播放的声音（不含你自己的麦克风），也可以在下拉框里只选会议软件。
-                  Windows 直接可用；macOS 需要 13 及以上并已授予「屏幕录制」权限。
-                  {isMac && ' 若提示不支持，请安装 BlackHole 虚拟声卡并改用「输入设备」。'}
-                </>
-              )
             }
             error={appsError}
-          />
-          <SourceRow
-            source="microphone"
-            label="输入设备"
-            active={value.audioSource === 'microphone'}
-            onActivate={(audioSource) => update({ audioSource })}
-            control={
-              <>
-                <select
-                  className={selectClassName}
-                  value={value.audioDeviceId}
-                  onChange={(event) =>
-                    update({ audioSource: 'microphone', audioDeviceId: event.target.value })
-                  }
-                >
-                  <option value="">系统默认输入设备</option>
-                  {devices.map((device, index) => (
-                    <option key={device.deviceId || index} value={device.deviceId}>
-                      {device.label || `输入设备 ${index + 1}`}
-                    </option>
-                  ))}
-                </select>
-                <RefreshButton
-                  title="刷新设备列表（首次需要授权麦克风）"
-                  onClick={() => {
-                    update({ audioSource: 'microphone' })
-                    void refreshDevices(true)
-                  }}
-                />
-              </>
-            }
-            hint="麦克风，或 BlackHole / VB-Cable 等虚拟声卡"
           />
         </div>
       </section>
@@ -443,52 +373,27 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
   )
 }
 
-function SourceRow({
-  source,
-  label,
-  active,
-  onActivate,
-  control,
-  hint,
-  error
-}: {
-  source: VoiceAudioSource
-  label: string
-  active: boolean
-  onActivate: (source: VoiceAudioSource) => void
-  control: React.ReactNode
-  hint?: React.ReactNode
-  error?: string | null
-}) {
+function OutputSourceRow({ control, error }: { control: React.ReactNode; error?: string | null }) {
   return (
-    <div
-      className={`px-3 py-2.5 space-y-1.5 cursor-pointer ${active ? 'bg-gray-100/80 dark:bg-gray-700/60' : 'bg-white/40 dark:bg-gray-800/40'}`}
-      onClick={() => onActivate(source)}
-    >
+    <div className="px-3 py-2.5 space-y-1.5 bg-gray-100/80 dark:bg-gray-700/60">
       <div className="flex items-center gap-3">
-        <span className="flex items-center gap-2 w-24 shrink-0 text-sm font-medium">
-          <span
-            className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center ${active ? 'border-gray-800 dark:border-gray-200' : 'border-gray-400'}`}
-          >
-            {active && <span className="h-2 w-2 rounded-full bg-gray-800 dark:bg-gray-200" />}
-          </span>
-          {label}
-        </span>
-        <div
-          className="flex flex-1 min-w-0 items-center gap-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {control}
-        </div>
+        <label htmlFor="voice-output-target" className="w-24 shrink-0 text-sm font-medium">
+          输出音频
+        </label>
+        <div className="flex flex-1 min-w-0 items-center gap-2">{control}</div>
       </div>
-      {hint && (
-        <p className="pl-[6.75rem] text-xs text-gray-500 dark:text-gray-400 leading-5">{hint}</p>
-      )}
       {error && <p className="pl-[6.75rem] text-xs text-red-400 break-words">{error}</p>}
     </div>
   )
 }
 
+const REFRESH_MIN_BUSY_MS = 450
+const REFRESH_DONE_MS = 1500
+
+/**
+ * 刷新按钮：IPC 常常几毫秒就返回，因此保证一个最短忙碌时长让动效可见，
+ * 成功后短暂显示「已刷新」，失败由调用方的错误文案表达。
+ */
 function RefreshButton({
   title,
   loading,
@@ -498,20 +403,59 @@ function RefreshButton({
   title: string
   loading?: boolean
   disabled?: boolean
-  onClick: () => void
+  onClick: () => boolean | void | Promise<boolean | void>
 }) {
+  const [phase, setPhase] = useState<'idle' | 'busy' | 'done'>('idle')
+  const running = useRef(false)
+  const doneTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const busy = loading || phase === 'busy'
+
+  useEffect(
+    () => () => {
+      if (doneTimer.current) clearTimeout(doneTimer.current)
+    },
+    []
+  )
+
+  const run = async (): Promise<void> => {
+    if (disabled || running.current) return
+    running.current = true
+    if (doneTimer.current) {
+      clearTimeout(doneTimer.current)
+      doneTimer.current = null
+    }
+    setPhase('busy')
+    const startedAt = Date.now()
+    let ok = true
+    try {
+      ok = (await onClick()) !== false
+    } catch {
+      ok = false
+    }
+    const remaining = REFRESH_MIN_BUSY_MS - (Date.now() - startedAt)
+    if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining))
+    running.current = false
+    setPhase(ok ? 'done' : 'idle')
+    if (ok) doneTimer.current = setTimeout(() => setPhase('idle'), REFRESH_DONE_MS)
+  }
+
   return (
     <Button
       type="button"
       variant="outline"
       size="sm"
-      className="shrink-0"
-      disabled={disabled || loading}
-      onClick={onClick}
+      className="shrink-0 justify-center min-w-[5.5rem]"
+      disabled={disabled || busy}
+      onClick={() => void run()}
       title={title}
+      aria-busy={busy}
     >
-      <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-      刷新
+      {phase === 'done' && !busy ? (
+        <Check className="h-4 w-4 mr-1 text-emerald-500" />
+      ) : (
+        <RefreshCw className={`h-4 w-4 mr-1 ${busy ? 'animate-spin' : ''}`} />
+      )}
+      {busy ? '刷新中…' : phase === 'done' ? '已刷新' : '刷新'}
     </Button>
   )
 }
@@ -583,6 +527,7 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
   const sessionRef = useRef<AudioCaptureSession | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idRef = useRef(0)
+  const startRef = useRef<AbortController | null>(null)
 
   const stop = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -593,6 +538,8 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
       session.flush()
       session.stop()
     }
+    startRef.current?.abort()
+    startRef.current = null
     setRunning(false)
     setLevel(-100)
   }, [])
@@ -600,6 +547,9 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
   useEffect(() => stop, [stop])
 
   const start = async () => {
+    if (startRef.current) return
+    const controller = new AbortController()
+    startRef.current = controller
     setError(null)
     setLines([])
     setRunning(true)
@@ -607,13 +557,15 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
       sessionRef.current = await AudioCaptureSession.start(
         {
           source: config.audioSource,
-          deviceId: config.audioDeviceId,
           appId: config.audioAppId,
           vad: config.vad
         },
         {
-          onLevel: setLevel,
+          onLevel: (db) => {
+            if (startRef.current === controller) setLevel(db)
+          },
           onEnded: (reason) => {
+            if (startRef.current !== controller) return
             setError(reason)
             stop()
           },
@@ -645,10 +597,18 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
                 )
               )
           }
-        }
+        },
+        { owner: 'test', signal: controller.signal }
       )
+      if (controller.signal.aborted) {
+        await sessionRef.current?.stop()
+        sessionRef.current = null
+        return
+      }
       timerRef.current = setTimeout(stop, TEST_DURATION_MS)
     } catch (err) {
+      if (controller.signal.aborted) return
+      startRef.current = null
       setError(err instanceof Error ? err.message : String(err))
       setRunning(false)
     }
@@ -664,7 +624,7 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
           onClick={running ? stop : start}
           title="用当前（未保存的）配置录 8 秒并调用识别服务"
         >
-          {running ? <Square className="h-4 w-4 mr-1" /> : <Mic className="h-4 w-4 mr-1" />}
+          {running ? <Square className="h-4 w-4 mr-1" /> : <AudioLines className="h-4 w-4 mr-1" />}
           {running ? '停止测试' : '录音测试（8 秒）'}
         </Button>
         <LevelMeter
@@ -685,7 +645,7 @@ function CaptureTest({ config }: { config: VoiceConfig }) {
         </ul>
       )}
       {running && lines.length === 0 && (
-        <p className="text-xs text-gray-500">请让会议软件播放声音或对着设备说话…</p>
+        <p className="text-xs text-gray-500">请让所选应用或系统播放声音；仅采集输出音频。</p>
       )}
     </div>
   )

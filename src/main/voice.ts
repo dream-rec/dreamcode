@@ -12,11 +12,16 @@ import {
   type VoiceSnapshot
 } from '../shared/voice'
 import { normalizeVoiceConfig, type VoiceSttConfig } from '../shared/settings'
-import { settings } from './settings'
+import { settings, onCaptureTargetChange } from './settings'
 import { getVoiceAnswerStream, getVoiceProviderConfig } from './ai'
 import { transcribeAudio } from './stt'
 import { ThinkTagStreamFilter, extractErrorMessage } from './stream-utils'
-import { listAudioApps, startAppCapture, type AppCapture } from './app-audio'
+import {
+  ensureCapturePermission,
+  listAudioApps,
+  startAppCapture,
+  type AppCapture
+} from './app-audio'
 
 /**
  * Voice assistant state machine (single source of truth lives here).
@@ -43,13 +48,20 @@ const snapshot: VoiceSnapshot = {
   segments: [],
   selection: null,
   exchanges: [],
-  error: null
+  error: null,
+  captureNotice: null
 }
 
 let conversation: ModelMessage[] = []
 let currentAnswer: AnswerContext | null = null
 const pendingTranscriptions = new Map<number, Promise<void>>()
 let requestCounter = 0
+let segmentCounter = 0
+let sendGeneration = 0
+let activeCaptureId: string | null = null
+let captureLease: { id: string; owner: 'voice' | 'test' } | null = null
+let retiringCapture: Promise<void> | null = null
+let startTimer: ReturnType<typeof setTimeout> | null = null
 /** Resolvers for capture commands that need a renderer acknowledgement. */
 const pendingAcks = new Map<string, () => void>()
 
@@ -121,54 +133,105 @@ function getSttConfigError(config: VoiceSttConfig): string | null {
 // ---------------------------------------------------------------------------
 
 export function startListening(): boolean {
-  if (snapshot.captureState !== 'idle') return false
+  if (retiringCapture || snapshot.captureState !== 'idle') return false
   const mainWindow = getMainWindow()
   if (!mainWindow) return false
-
+  if (captureLease) {
+    setError('录音测试仍在运行，请先停止测试再开始监听')
+    return false
+  }
   const voice = settings.voice
   const configError = getSttConfigError(voice.stt)
   if (configError) {
     setError(configError)
-    if (voice.autoOpenPage) mainWindow.webContents.send('navigate-voice-page')
     return false
   }
-
+  const id = nextRequestId('capture')
+  activeCaptureId = id
+  captureLease = { id, owner: 'voice' }
   snapshot.captureState = 'starting'
   snapshot.error = null
+  snapshot.captureNotice = null
   broadcast()
   if (voice.autoOpenPage) mainWindow.webContents.send('navigate-voice-page')
-
-  sendCaptureCommand({
-    type: 'start',
-    requestId: nextRequestId('start'),
-    config: {
-      source: voice.audioSource,
-      deviceId: voice.audioDeviceId,
-      appId: voice.audioAppId,
-      vad: { ...voice.vad }
-    }
-  })
+  startTimer = setTimeout(() => {
+    if (activeCaptureId !== id || snapshot.captureState !== 'starting') return
+    void retireCapture()
+      .then(() => setError('音频采集启动超时，请检查目标应用和权限后重试'))
+      .catch((error: unknown) => setError(extractErrorMessage(error)))
+  }, 55_000)
+  if (
+    !sendCaptureCommand({
+      type: 'start',
+      sessionId: id,
+      requestId: id,
+      config: {
+        source: voice.audioSource,
+        appId: voice.audioAppId,
+        vad: { ...voice.vad }
+      }
+    })
+  ) {
+    void retireCapture().catch((error: unknown) => setError(extractErrorMessage(error)))
+    return false
+  }
   return true
 }
 
 async function stopListening(discard: boolean): Promise<void> {
-  if (snapshot.captureState !== 'listening' && snapshot.captureState !== 'starting') return
+  if (retiringCapture) return retiringCapture
+  const id = activeCaptureId
+  if (!id) return
   snapshot.captureState = 'stopping'
+  if (startTimer) clearTimeout(startTimer)
+  startTimer = null
   broadcast()
   const requestId = nextRequestId('stop')
-  const ackPromise = waitForAck(requestId, 5000)
-  if (!sendCaptureCommand({ type: 'stop', requestId, discard })) {
+  const ack = waitForAck(requestId, 5000)
+  if (!sendCaptureCommand({ type: 'stop', sessionId: id, requestId, discard }))
     resolveAck(requestId)
-  }
-  await ackPromise
-  snapshot.captureState = 'idle'
-  if (discard) {
-    snapshot.segments = []
-    snapshot.selection = null
-    pendingTranscriptions.clear()
-  }
-  broadcast()
+  retiringCapture = (async () => {
+    await stopAppCapture(id)
+    const acknowledged = await ack
+    if (activeCaptureId === id) {
+      if (!acknowledged) {
+        setError('采集停止确认超时，请再次保存或取消监听重试')
+        throw new Error('采集停止确认超时，尚未确认旧音源已释放')
+      }
+      activeCaptureId = null
+      if (captureLease?.id === id) captureLease = null
+      snapshot.captureState = 'idle'
+      snapshot.captureNotice = null
+      if (discard) {
+        snapshot.segments = []
+        snapshot.selection = null
+        pendingTranscriptions.clear()
+      }
+      broadcast()
+    }
+  })().finally(() => {
+    retiringCapture = null
+  })
+  return retiringCapture
 }
+
+/** Changing a target retires capture, not the transcript or answer history. */
+async function retireCapture(): Promise<void> {
+  sendGeneration++
+  if (activeCaptureId) {
+    await stopListening(false)
+  } else if (captureLease) {
+    const id = captureLease.id
+    getMainWindow()?.webContents.send('voice-app-ended', {
+      id,
+      reason: '音频目标已更改，请重新开始测试'
+    })
+    await stopAppCapture(id)
+    if (captureLease?.id === id) captureLease = null
+  }
+}
+
+onCaptureTargetChange(retireCapture)
 
 /** Shortcut: idle → start listening; listening → stop listening and send the transcript. */
 export async function toggleListening(): Promise<void> {
@@ -176,25 +239,39 @@ export async function toggleListening(): Promise<void> {
     startListening()
     return
   }
-  if (snapshot.captureState === 'listening') {
+  if (snapshot.captureState === 'stopping' && !retiringCapture) {
     await stopListening(false)
-    await sendPendingTranscript()
+    return
+  }
+  if (snapshot.captureState === 'listening') {
+    const generation = ++sendGeneration
+    await stopListening(false)
+    await sendPendingTranscript(generation)
   }
 }
 
 /** Shortcut: send whatever has been transcribed so far but keep listening. */
 export async function sendNow(): Promise<void> {
+  if (snapshot.captureState === 'starting' || snapshot.captureState === 'stopping') return
+  const generation = ++sendGeneration
   if (snapshot.captureState === 'listening') {
     const requestId = nextRequestId('flush')
     const ackPromise = waitForAck(requestId, 3000)
-    if (!sendCaptureCommand({ type: 'flush', requestId })) resolveAck(requestId)
-    await ackPromise
+    if (!sendCaptureCommand({ type: 'flush', sessionId: activeCaptureId ?? '', requestId }))
+      resolveAck(requestId)
+    const acknowledged = await ackPromise
+    if (generation !== sendGeneration) return
+    if (!acknowledged) {
+      setError('音频分段确认超时，请重试发送')
+      return
+    }
   }
-  await sendPendingTranscript()
+  await sendPendingTranscript(generation)
 }
 
 /** Shortcut: stop listening and throw away the un-sent transcript. */
 export async function cancelListening(): Promise<void> {
+  sendGeneration++
   if (snapshot.captureState === 'idle') {
     if (snapshot.segments.length) {
       snapshot.segments = []
@@ -207,6 +284,7 @@ export async function cancelListening(): Promise<void> {
 
 /** Clears transcript, answers and LLM conversation history (listening state is untouched). */
 export function clearSession(): void {
+  sendGeneration++
   abortAnswer('user')
   snapshot.segments = []
   snapshot.selection = null
@@ -240,8 +318,9 @@ function upsertSegment(segment: TranscriptSegment) {
 }
 
 async function handleSegment(payload: VoiceSegmentPayload): Promise<void> {
+  const seq = ++segmentCounter
   const segment: TranscriptSegment = {
-    seq: payload.seq,
+    seq,
     startedAt: payload.startedAt,
     durationMs: payload.durationMs,
     text: '',
@@ -252,33 +331,42 @@ async function handleSegment(payload: VoiceSegmentPayload): Promise<void> {
   const wav = payload.wav instanceof Uint8Array ? payload.wav : new Uint8Array(payload.wav)
   const job = transcribeAudio(wav, settings.voice.stt)
     .then((text) => {
-      const current = snapshot.segments.find((item) => item.seq === payload.seq)
+      const current = snapshot.segments.find((item) => item.seq === seq)
       if (!current) return // discarded meanwhile
       if (!text) {
         // Silence / noise recognised as nothing: drop the line rather than show an empty row.
-        snapshot.segments = snapshot.segments.filter((item) => item.seq !== payload.seq)
+        snapshot.segments = snapshot.segments.filter((item) => item.seq !== seq)
         broadcast()
         return
       }
       upsertSegment({ ...current, text, status: 'done' })
     })
     .catch((error) => {
-      const current = snapshot.segments.find((item) => item.seq === payload.seq)
+      const current = snapshot.segments.find((item) => item.seq === seq)
       if (!current) return
       console.error('Voice transcription failed:', error)
       upsertSegment({ ...current, status: 'error', error: extractErrorMessage(error) })
     })
     .finally(() => {
-      pendingTranscriptions.delete(payload.seq)
+      pendingTranscriptions.delete(seq)
     })
-  pendingTranscriptions.set(payload.seq, job)
+  pendingTranscriptions.set(seq, job)
   await job
 }
 
-async function waitForTranscriptions(): Promise<void> {
-  // Bound the wait so one stuck request can't block sending forever.
-  const timeout = new Promise<void>((resolve) => setTimeout(resolve, 50_000))
-  await Promise.race([Promise.allSettled([...pendingTranscriptions.values()]), timeout])
+async function waitForTranscriptions(seqs: Set<number>): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, 50_000)
+  })
+  const jobs = [...seqs]
+    .map((seq) => pendingTranscriptions.get(seq))
+    .filter((job) => job !== undefined)
+  try {
+    await Promise.race([Promise.allSettled(jobs), timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -309,18 +397,28 @@ function buildQuestion(segments: TranscriptSegment[]): string {
 }
 
 /** Sends every line not sent yet, then starts a fresh transcript. */
-async function sendPendingTranscript(): Promise<void> {
-  await waitForTranscriptions()
-  const question = buildQuestion(snapshot.segments.filter((segment) => !segment.sent))
+async function sendPendingTranscript(generation: number): Promise<void> {
+  if (generation !== sendGeneration) return
+  const batch = new Set(
+    snapshot.segments.filter((segment) => !segment.sent).map((segment) => segment.seq)
+  )
+  await waitForTranscriptions(batch)
+  if (generation !== sendGeneration) return
+  const segments = snapshot.segments.filter((segment) => batch.has(segment.seq) && !segment.sent)
+  const sendable = segments.filter(isSendable)
+  const question = buildQuestion(sendable)
   if (!question) {
-    const hasErrors = snapshot.segments.some((segment) => segment.status === 'error')
+    const hasErrors = segments.some((segment) => segment.status === 'error')
     setError(hasErrors ? '语音识别失败，未获得可用文本' : '没有识别到内容，请重新监听')
-    snapshot.segments = snapshot.segments.filter((segment) => segment.status === 'pending')
+    snapshot.segments = snapshot.segments.filter(
+      (segment) => !batch.has(segment.seq) || segment.status === 'pending'
+    )
     broadcast()
     return
   }
-  snapshot.segments = []
-  snapshot.selection = null
+  const sent = new Set(sendable.map((segment) => segment.seq))
+  snapshot.segments = snapshot.segments.filter((segment) => !sent.has(segment.seq))
+  normalizeSelection()
   await askLlm(question)
 }
 
@@ -388,6 +486,7 @@ export function clearSelection(): void {
  * "send all" actions.
  */
 export async function sendSelected(): Promise<void> {
+  sendGeneration++
   let chosen = selectedSegments()
   if (!chosen.length) {
     const latest = snapshot.segments.filter(isSendable).at(-1)
@@ -528,72 +627,111 @@ ipcMain.handle('voice:sendSelected', () => sendSelected())
 
 // ---- Per-application capture (native helper → PCM over IPC) ----
 
-let appCapture: { id: number; capture: AppCapture } | null = null
-let appCaptureCounter = 0
+let appCapture: { id: string; controller: AbortController; promise: Promise<AppCapture> } | null =
+  null
 
-function stopAppCapture(id?: number) {
-  if (!appCapture || (id !== undefined && appCapture.id !== id)) return
-  appCapture.capture.stop()
-  appCapture = null
+async function stopAppCapture(id?: string): Promise<void> {
+  const current = appCapture
+  if (!current || (id !== undefined && current.id !== id)) return
+  current.controller.abort()
+  try {
+    await (await current.promise).stop()
+  } catch {
+    /* Cancelled startup has already cleaned up. */
+  }
+  if (appCapture === current) appCapture = null
 }
 
 ipcMain.handle('voice:listAudioApps', () => listAudioApps())
-
-/** Only one helper runs at a time; a new start replaces the previous capture. */
-ipcMain.handle('voice:appCaptureStart', async (event, appId: string): Promise<number> => {
-  stopAppCapture()
-  appCaptureCounter += 1
-  const id = appCaptureCounter
+ipcMain.handle('voice:ensureCapturePermission', () => ensureCapturePermission())
+ipcMain.handle('voice:reserveCapture', (_event, id: string, owner: 'voice' | 'test') => {
+  if (!id || (owner !== 'voice' && owner !== 'test')) throw new Error('无效的采集会话')
+  if (retiringCapture) throw new Error('旧采集正在停止，请稍后重试')
+  if (owner === 'voice' && id !== activeCaptureId) throw new Error('监听启动已失效')
+  if (owner === 'test' && snapshot.captureState !== 'idle')
+    throw new Error('请先停止正式监听，再进行录音测试')
+  if (captureLease && captureLease.id !== id) throw new Error('另一个录音会话正在运行，请先停止它')
+  captureLease = { id, owner }
+})
+ipcMain.handle('voice:releaseCapture', async (_event, id: string) => {
+  await stopAppCapture(id)
+  if (captureLease?.id === id) captureLease = null
+})
+ipcMain.handle('voice:appCaptureStart', async (event, appId: string, id: string): Promise<void> => {
+  if (captureLease?.id !== id || retiringCapture) throw new Error('音频采集会话已失效')
+  if (appCapture) throw new Error('旧应用采集尚未结束，请稍后重试')
+  const controller = new AbortController()
   const sender = event.sender
-  const capture = await startAppCapture(appId, {
-    onPcm: (samples) => {
-      if (!sender.isDestroyed()) sender.send('voice-app-pcm', { id, samples })
+  const promise = startAppCapture(
+    appId,
+    {
+      onPcm: (samples) => {
+        if (captureLease?.id === id && !controller.signal.aborted && !sender.isDestroyed()) {
+          sender.send('voice-app-pcm', { id, samples })
+        }
+      },
+      onEnded: (reason) => {
+        if (captureLease?.id === id && !controller.signal.aborted && !sender.isDestroyed()) {
+          sender.send('voice-app-ended', { id, reason })
+        }
+      },
+      onFallback: () => {
+        // 目标应用开麦进入双工后，helper 已切换为系统声音采集；这是行为提示，不是错误。
+        if (
+          captureLease?.id === id &&
+          captureLease?.owner === 'voice' &&
+          !controller.signal.aborted
+        ) {
+          snapshot.captureNotice =
+            '目标应用正在使用麦克风，已切换为采集全部系统声音（可能包含其他应用的声音）'
+          broadcast()
+        }
+      }
     },
-    onEnded: (reason) => {
-      if (appCapture?.id === id) appCapture = null
-      if (!sender.isDestroyed()) sender.send('voice-app-ended', { id, reason })
+    controller.signal
+  )
+  const current = { id, controller, promise }
+  appCapture = current
+  try {
+    const capture = await promise
+    if (captureLease?.id !== id || controller.signal.aborted) {
+      await capture.stop()
+      throw new Error('音频采集启动已取消')
     }
-  })
-  if (appCaptureCounter !== id) {
-    // Superseded while the helper was starting.
-    capture.stop()
-    throw new Error('应用音频采集已被新的请求替代')
-  }
-  appCapture = { id, capture }
-  return id
-})
-
-ipcMain.handle('voice:appCaptureStop', (_event, id: number) => stopAppCapture(id))
-
-ipcMain.handle('voice:captureStarted', () => {
-  if (snapshot.captureState === 'starting') {
-    snapshot.captureState = 'listening'
-    broadcast()
+  } catch (error) {
+    if (appCapture === current) appCapture = null
+    throw error
   }
 })
+ipcMain.handle('voice:appCaptureStop', (_event, id: string) => stopAppCapture(id))
 
-ipcMain.handle('voice:captureStopped', (_event, requestId: string) => {
-  resolveAck(requestId)
-  // Renderer stopped on its own (device unplugged, stream ended) without a request.
-  if (!requestId && snapshot.captureState !== 'idle') {
-    snapshot.captureState = 'idle'
-    broadcast()
-  }
+ipcMain.handle('voice:captureStarted', (_event, id: string) => {
+  if (activeCaptureId !== id || snapshot.captureState !== 'starting') return
+  if (startTimer) clearTimeout(startTimer)
+  startTimer = null
+  snapshot.captureState = 'listening'
+  broadcast()
 })
-
-ipcMain.handle('voice:flushed', (_event, requestId: string) => {
-  resolveAck(requestId)
+ipcMain.handle('voice:captureStopped', (_event, id: string, requestId: string) => {
+  if (activeCaptureId === id) resolveAck(requestId)
 })
-
-ipcMain.handle('voice:captureError', (_event, message: string) => {
-  console.error('Voice capture error:', message)
+ipcMain.handle('voice:flushed', (_event, id: string, requestId: string) => {
+  if (activeCaptureId === id) resolveAck(requestId)
+})
+ipcMain.handle('voice:captureError', async (_event, id: string, message: string) => {
+  if (activeCaptureId !== id || snapshot.captureState === 'stopping') return
+  if (startTimer) clearTimeout(startTimer)
+  startTimer = null
+  await stopAppCapture(id)
+  if (activeCaptureId !== id) return
+  activeCaptureId = null
+  if (captureLease?.id === id) captureLease = null
   snapshot.captureState = 'idle'
+  snapshot.captureNotice = null
   setError(message)
 })
-
 ipcMain.handle('voice:pushSegment', (_event, payload: VoiceSegmentPayload) => {
-  // Fire and forget: the renderer must not block on network latency.
-  void handleSegment(payload)
+  if (payload.sessionId === activeCaptureId) void handleSegment(payload)
 })
 
 /** Settings-page helper: transcribe a clip with a not-yet-saved config. */

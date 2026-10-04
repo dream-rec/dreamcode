@@ -9,19 +9,13 @@ import { Dialog, DialogTitle, DialogContent, DialogFooter } from '@/components/u
 import { Textarea } from '@/components/ui/textarea'
 
 export function AppStatusBar() {
-  const {
-    isLoading: isReceivingSolution,
-    setIsLoading,
-    screenshotData,
-    solutionChunks
-  } = useSolutionStore()
+  const { isLoading: isReceivingSolution, screenshotSnapshot, setErrorMessage } = useSolutionStore()
   const { ignoreMouse } = useAppStore()
   const { shortcuts } = useShortcutsStore()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [questionInput, setQuestionInput] = useState('')
 
   const handleStop = () => {
-    setIsLoading(false)
     void window.api.stopSolutionStream()
   }
 
@@ -37,21 +31,20 @@ export function AppStatusBar() {
   const handleSubmitQuestion = async () => {
     if (!questionInput.trim()) return
 
-    setIsLoading(true)
     setIsDialogOpen(false)
     const question = questionInput.trim()
     setQuestionInput('')
 
     try {
-      await window.api.sendFollowUpQuestion(question)
+      const result = await window.api.sendFollowUpQuestion(question)
+      if (!result.success) setQuestionInput(question)
     } catch (error) {
-      console.error('Error sending follow-up question:', error)
-      setIsLoading(false)
+      setErrorMessage(error instanceof Error ? error.message : String(error))
     }
   }
 
   // Check if there's an active conversation
-  const hasActiveConversation = screenshotData && solutionChunks.length > 0
+  const hasActiveConversation = screenshotSnapshot?.hasAnswer && !screenshotSnapshot.retry
 
   return (
     <div className="absolute bottom-0 flex items-center justify-between w-full text-gray-500 bg-white/40 dark:bg-black/40 backdrop-blur-sm border-t border-gray-200/50 dark:border-gray-700/50 px-4 pb-1">
@@ -82,7 +75,7 @@ export function AppStatusBar() {
                 shortcut={shortcuts.appendScreenshot.key}
                 className="inline-block scale-75 text-xs border border-current bg-transparent py-0 px-1 ml-1"
               />
-              追加截图
+              追加截图（2 秒后自动分析）
             </span>
             <span>
               <ShortcutRenderer
@@ -102,7 +95,11 @@ export function AppStatusBar() {
             size="sm"
             onClick={handleFollowUpClick}
             className="h-7 px-3 text-xs"
-            disabled={isReceivingSolution}
+            disabled={
+              isReceivingSolution ||
+              !!screenshotSnapshot?.pendingCount ||
+              !!screenshotSnapshot?.capturing
+            }
           >
             <MessageCircle className="w-4 h-4 mr-1" />
             追问问题

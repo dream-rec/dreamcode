@@ -1,11 +1,13 @@
 import { globalShortcut, ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
-import type { ModelMessage } from 'ai'
-import { takeScreenshot } from './take-screenshot'
-import { getSolutionStream, getFollowUpStream, getGeneralStream } from './ai'
+import {
+  captureNewQuestion,
+  collectScreenshot,
+  sendScreenshotFollowUp,
+  stopScreenshotStream
+} from './screenshots'
 import { state } from './state'
-import { activatePromptGroupAt, activateProviderGroupAt, settings } from './settings'
-import { ThinkTagStreamFilter, extractErrorMessage } from './stream-utils'
+import { activatePromptGroupAt, activateProviderGroupAt } from './settings'
 import * as voice from './voice'
 
 type Shortcut = {
@@ -24,20 +26,6 @@ enum ShortcutStatus {
 
 const MOVE_STEP = 200
 const shortcuts: Record<string, Shortcut> = {}
-
-type AbortReason = 'user' | 'new-request'
-
-interface StreamContext {
-  controller: AbortController
-  reason: AbortReason | null
-}
-
-let currentStreamContext: StreamContext | null = null
-
-// Conversation history tracking
-let conversationMessages: ModelMessage[] = []
-let recentScreenshots: string[] = [] // 最近截图，水平预览 (限5张)
-let hasAppendSeparator = false
 
 const FRONT_REASSERT_DURATION = 5000
 const FRONT_REASSERT_INTERVAL = 150
@@ -77,12 +65,6 @@ function keepWindowInFront(window: BrowserWindow) {
   }, FRONT_REASSERT_INTERVAL)
 }
 
-function abortCurrentStream(reason: AbortReason) {
-  if (!currentStreamContext) return
-  currentStreamContext.reason = reason
-  currentStreamContext.controller.abort()
-}
-
 const callbacks: Record<string, () => void> = {
   hideOrShowMainWindow: async () => {
     const mainWindow = global.mainWindow
@@ -101,242 +83,16 @@ const callbacks: Record<string, () => void> = {
   },
 
   takeScreenshot: async () => {
-    const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) return
-
-    abortCurrentStream('new-request')
-    let loadingStarted = false
-    const screenshotData = await takeScreenshot()
-    if (screenshotData && mainWindow && !mainWindow.isDestroyed()) {
-      conversationMessages = [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `这是屏幕截图`
-            },
-            {
-              type: 'image',
-              image: screenshotData
-            }
-          ]
-        }
-      ]
-
-      const streamContext: StreamContext = {
-        controller: new AbortController(),
-        reason: null
-      }
-      currentStreamContext = streamContext
-      recentScreenshots = [screenshotData]
-      hasAppendSeparator = false
-      mainWindow.webContents.send('solution-clear')
-      mainWindow.webContents.send('screenshots-updated', recentScreenshots)
-      mainWindow.webContents.send('screenshot-taken', screenshotData)
-      mainWindow.webContents.send('ai-loading-start')
-      loadingStarted = true
-      let endedNaturally = true
-      let streamStarted = false
-      let assistantResponse = ''
-      const filter = new ThinkTagStreamFilter()
-      try {
-        const solutionStream = getSolutionStream(screenshotData, streamContext.controller.signal)
-        streamStarted = true
-        try {
-          for await (const chunk of solutionStream) {
-            if (streamContext.controller.signal.aborted) {
-              endedNaturally = false
-              break
-            }
-            const visibleChunk = filter.push(chunk)
-            if (!visibleChunk) continue
-            assistantResponse += visibleChunk
-            mainWindow.webContents.send('solution-chunk', visibleChunk)
-          }
-
-          const trailingChunk = filter.finish()
-          if (trailingChunk) {
-            assistantResponse += trailingChunk
-            mainWindow.webContents.send('solution-chunk', trailingChunk)
-          }
-        } catch (error) {
-          if (!streamContext.controller.signal.aborted) {
-            endedNaturally = false
-            console.error('Error streaming solution:', error)
-            mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-          } else {
-            endedNaturally = false
-          }
-        }
-
-        if (streamContext.controller.signal.aborted) {
-          if (streamContext.reason === 'user') {
-            mainWindow.webContents.send('solution-stopped')
-          }
-        } else if (endedNaturally) {
-          // Add assistant response to conversation history
-          if (assistantResponse) {
-            conversationMessages.push({
-              role: 'assistant',
-              content: assistantResponse
-            })
-          }
-          mainWindow.webContents.send('solution-complete')
-        }
-      } catch (error) {
-        if (streamContext.controller.signal.aborted) {
-          if (streamContext.reason === 'user') {
-            mainWindow.webContents.send('solution-stopped')
-          }
-        } else {
-          endedNaturally = false
-          console.error('Error streaming solution:', error)
-          mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-        }
-      } finally {
-        if (currentStreamContext === streamContext) {
-          currentStreamContext = null
-        }
-        if (!streamStarted && streamContext.reason === 'user') {
-          mainWindow.webContents.send('solution-stopped')
-        }
-        if (loadingStarted && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('ai-loading-end')
-        }
-      }
-    }
+    await captureNewQuestion()
   },
 
-  // Append screenshot for continuous capture (if conversation exists)
   appendScreenshot: async () => {
-    const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) return
-
-    // Fallback to first screenshot if no conversation
-    if (conversationMessages.length === 0) {
-      await callbacks.takeScreenshot()
-      return
-    }
-
-    abortCurrentStream('new-request')
-    let loadingStarted = false
-
-    const screenshotData = await takeScreenshot()
-    if (screenshotData && mainWindow && !mainWindow.isDestroyed()) {
-      // Append new image message to conversation
-      const newUserMessage: ModelMessage = {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: '这是下一部分截图，请结合之前所有截图和分析，继续完整解答整个题目，不要遗漏任何信息。'
-          },
-          {
-            type: 'image',
-            image: screenshotData
-          }
-        ]
-      }
-      conversationMessages.push(newUserMessage)
-
-      const streamContext: StreamContext = {
-        controller: new AbortController(),
-        reason: null
-      }
-      currentStreamContext = streamContext
-
-      recentScreenshots.push(screenshotData)
-      recentScreenshots = recentScreenshots.slice(-5) // 限5张
-      mainWindow.webContents.send('screenshot-taken', screenshotData)
-      mainWindow.webContents.send('screenshots-updated', recentScreenshots)
-      if (!hasAppendSeparator) {
-        mainWindow.webContents.send('solution-chunk', '\n\n---\n\n')
-        hasAppendSeparator = true
-      } else {
-        mainWindow.webContents.send('solution-chunk', '\n\n')
-      }
-      mainWindow.webContents.send('ai-loading-start')
-      loadingStarted = true
-
-      let endedNaturally = true
-      let streamStarted = false
-      let assistantResponse = ''
-      const filter = new ThinkTagStreamFilter()
-      try {
-        const solutionStream = getGeneralStream(
-          conversationMessages,
-          streamContext.controller.signal
-        )
-        streamStarted = true
-        try {
-          for await (const chunk of solutionStream) {
-            if (streamContext.controller.signal.aborted) {
-              endedNaturally = false
-              break
-            }
-            const visibleChunk = filter.push(chunk)
-            if (!visibleChunk) continue
-            assistantResponse += visibleChunk
-            mainWindow.webContents.send('solution-chunk', visibleChunk)
-          }
-
-          const trailingChunk = filter.finish()
-          if (trailingChunk) {
-            assistantResponse += trailingChunk
-            mainWindow.webContents.send('solution-chunk', trailingChunk)
-          }
-        } catch (error) {
-          if (!streamContext.controller.signal.aborted) {
-            endedNaturally = false
-            console.error('Error streaming continuous solution:', error)
-            mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-          } else {
-            endedNaturally = false
-          }
-        }
-
-        if (streamContext.controller.signal.aborted) {
-          if (streamContext.reason === 'user') {
-            mainWindow.webContents.send('solution-stopped')
-          }
-        } else if (endedNaturally) {
-          // Add assistant response to conversation history
-          if (assistantResponse) {
-            conversationMessages.push({
-              role: 'assistant',
-              content: assistantResponse
-            })
-          }
-          mainWindow.webContents.send('solution-complete')
-        }
-      } catch (error) {
-        if (streamContext.controller.signal.aborted) {
-          if (streamContext.reason === 'user') {
-            mainWindow.webContents.send('solution-stopped')
-          }
-        } else {
-          endedNaturally = false
-          console.error('Error streaming continuous solution:', error)
-          mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-        }
-      } finally {
-        if (currentStreamContext === streamContext) {
-          currentStreamContext = null
-        }
-        if (!streamStarted && streamContext.reason === 'user') {
-          mainWindow.webContents.send('solution-stopped')
-        }
-        if (loadingStarted && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('ai-loading-end')
-        }
-      }
-    }
+    await collectScreenshot()
   },
 
   // Stop current AI solution stream (screenshot answer or voice answer)
   stopSolutionStream: () => {
-    abortCurrentStream('user')
+    stopScreenshotStream()
     voice.stopAnswer()
   },
 
@@ -485,8 +241,6 @@ function unregisterShortcut(action: string) {
     shortcut.registeredKeys.forEach((registeredKey) => {
       globalShortcut.unregister(registeredKey)
     })
-  } else {
-    globalShortcut.unregister(shortcut.key)
   }
   shortcut.status = ShortcutStatus.Available
   shortcut.registeredKeys = []
@@ -531,8 +285,10 @@ function registerShortcut(action: string, key: string) {
   const keysToRegister = getShortcutRegistrationKeys(key, !isGroupShortcut)
   const registeredKeys: string[] = []
   keysToRegister.forEach((shortcutKey) => {
-    if (globalShortcut.register(shortcutKey, runCallback)) {
-      registeredKeys.push(shortcutKey)
+    try {
+      if (globalShortcut.register(shortcutKey, runCallback)) registeredKeys.push(shortcutKey)
+    } catch (error) {
+      console.error(`Cannot register shortcut ${shortcutKey}:`, error)
     }
   })
 
@@ -549,9 +305,7 @@ ipcMain.handle('getShortcuts', () => shortcuts)
 ipcMain.handle(
   'initShortcuts',
   (_event, shortcuts: Record<string, { action: string; key: string }>) => {
-    Object.entries(shortcuts).forEach(([action, { key }]) => {
-      registerShortcut(action, key)
-    })
+    Object.entries(shortcuts).forEach(([action, { key }]) => registerShortcut(action, key))
   }
 )
 
@@ -564,113 +318,10 @@ ipcMain.handle('updateShortcuts', (_event, _shortcuts: { action: string; key: st
 })
 
 ipcMain.handle('stopSolutionStream', () => {
-  if (!currentStreamContext) return false
-  abortCurrentStream('user')
+  stopScreenshotStream()
   return true
 })
 
-ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
-  const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) {
-    return { success: false, error: 'Invalid state' }
-  }
-
-  // Validate that there's an active conversation
-  if (conversationMessages.length === 0) {
-    return { success: false, error: 'No active conversation' }
-  }
-
-  abortCurrentStream('new-request')
-  const streamContext: StreamContext = {
-    controller: new AbortController(),
-    reason: null
-  }
-  currentStreamContext = streamContext
-
-  // Add a separator before the follow-up response
-  mainWindow.webContents.send('solution-chunk', '\n\n---\n\n')
-
-  let endedNaturally = true
-  let streamStarted = false
-  let assistantResponse = ''
-  const filter = new ThinkTagStreamFilter()
-
-  try {
-    const followUpStream = getFollowUpStream(
-      conversationMessages,
-      question,
-      streamContext.controller.signal
-    )
-    streamStarted = true
-
-    try {
-      for await (const chunk of followUpStream) {
-        if (streamContext.controller.signal.aborted) {
-          endedNaturally = false
-          break
-        }
-        const visibleChunk = filter.push(chunk)
-        if (!visibleChunk) continue
-        assistantResponse += visibleChunk
-        mainWindow.webContents.send('solution-chunk', visibleChunk)
-      }
-
-      const trailingChunk = filter.finish()
-      if (trailingChunk) {
-        assistantResponse += trailingChunk
-        mainWindow.webContents.send('solution-chunk', trailingChunk)
-      }
-    } catch (error) {
-      if (!streamContext.controller.signal.aborted) {
-        endedNaturally = false
-        console.error('Error streaming follow-up solution:', error)
-        mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-      } else {
-        endedNaturally = false
-      }
-    }
-
-    if (streamContext.controller.signal.aborted) {
-      if (streamContext.reason === 'user') {
-        mainWindow.webContents.send('solution-stopped')
-      }
-    } else if (endedNaturally) {
-      // Update conversation history with user question and assistant response
-      conversationMessages.push({
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: question
-          }
-        ]
-      })
-      if (assistantResponse) {
-        conversationMessages.push({
-          role: 'assistant',
-          content: assistantResponse
-        })
-      }
-      mainWindow.webContents.send('solution-complete')
-    }
-  } catch (error) {
-    if (streamContext.controller.signal.aborted) {
-      if (streamContext.reason === 'user') {
-        mainWindow.webContents.send('solution-stopped')
-      }
-    } else {
-      endedNaturally = false
-      console.error('Error streaming follow-up solution:', error)
-      mainWindow.webContents.send('solution-error', extractErrorMessage(error))
-    }
-  } finally {
-    if (currentStreamContext === streamContext) {
-      currentStreamContext = null
-    }
-    if (!streamStarted && streamContext.reason === 'user') {
-      mainWindow.webContents.send('solution-stopped')
-    }
-  }
-
-  return { success: true }
-})
+ipcMain.handle('sendFollowUpQuestion', (_event, question: string) =>
+  sendScreenshotFollowUp(question)
+)

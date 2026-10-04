@@ -38,7 +38,7 @@ mac:
   publish: null
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSAudioCaptureUsageDescription: Needed to capture audio played by the selected Chrome application for the voice assistant.
     - NSScreenCaptureUsageDescription: Needed to capture system audio and to listen to a single application's audio.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.

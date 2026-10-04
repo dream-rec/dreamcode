@@ -43,23 +43,30 @@ export interface VoiceSnapshot {
   selection: TranscriptSelection | null
   exchanges: VoiceExchange[]
   error: string | null
+  /**
+   * Non-fatal capture advisory, e.g. the whole-system-sound fallback while the target app uses
+   * its microphone. Cleared whenever capture ends; null = no advisory.
+   */
+  captureNotice: string | null
 }
 
 export interface VoiceCaptureConfig {
   source: VoiceAudioSource
-  deviceId: string
-  /** Capture only this application (system source); empty = the whole system mix. */
+  /** Capture only this application's output; empty = the whole system output mix. */
   appId: string
   vad: VoiceVadConfig
 }
 
+export type VoiceCaptureOwner = 'voice' | 'test'
+
 /** Commands the main process sends to the renderer capture controller. */
 export type VoiceCaptureCommand =
-  | { type: 'start'; requestId: string; config: VoiceCaptureConfig }
-  | { type: 'flush'; requestId: string }
-  | { type: 'stop'; requestId: string; discard: boolean }
+  | { type: 'start'; sessionId: string; requestId: string; config: VoiceCaptureConfig }
+  | { type: 'flush'; sessionId: string; requestId: string }
+  | { type: 'stop'; sessionId: string; requestId: string; discard: boolean }
 
 export interface VoiceSegmentPayload {
+  sessionId: string
   seq: number
   startedAt: number
   durationMs: number
