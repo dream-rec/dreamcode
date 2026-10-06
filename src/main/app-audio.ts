@@ -137,11 +137,20 @@ async function listMacApps(): Promise<AudioApp[]> {
   }
 }
 
-const WINDOWS_LIST_SCRIPT = [
-  '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-  'Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } |',
-  'Select-Object Id, ProcessName, Description, MainWindowTitle | ConvertTo-Json -Compress'
-].join(' ')
+/**
+ * Windows 10 的 `powershell.exe` 是 Windows PowerShell 5.1。
+ * 两条语句必须用分号隔开，否则赋值后面的 `Get-Process` 会被当成意外标记，整条命令解析失败。
+ * `[System.Text.Encoding]::UTF8` 会写出 BOM，而且 5.1 把管道里的 stdout 默认写成 UTF-16LE，
+ * 所以这里改成不带 BOM 的 UTF-8，并同时设置 `$OutputEncoding` 与控制台编码。
+ */
+export function buildWindowsProcessListScript(): string {
+  return [
+    "$ProgressPreference = 'SilentlyContinue';",
+    '$OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false;',
+    'Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle } |',
+    'Select-Object Id, ProcessName, Description, MainWindowTitle | ConvertTo-Json -Compress'
+  ].join(' ')
+}
 
 interface WindowsProcessRow {
   Id: number
@@ -150,26 +159,46 @@ interface WindowsProcessRow {
   MainWindowTitle: string | null
 }
 
-async function listWindowsApps(): Promise<AudioApp[]> {
-  const { stdout } = await execFileAsync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-NonInteractive',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      WINDOWS_LIST_SCRIPT
-    ],
-    { timeout: 15_000, windowsHide: true, encoding: 'utf8' }
-  )
-  const trimmed = stdout.trim()
-  if (!trimmed) return []
-  const parsed = JSON.parse(trimmed) as WindowsProcessRow | WindowsProcessRow[]
-  const rows = Array.isArray(parsed) ? parsed : [parsed]
+/** PowerShell 5.1 重定向 stdout 可能是 UTF-16LE；中文版 Windows 的错误信息则是系统 ANSI（如 GBK）。 */
+export function decodePowerShellText(data: Buffer | string | undefined | null): string {
+  if (data == null || data === '') return ''
+  if (typeof data === 'string') return data.replace(/^\uFEFF/, '')
+  if (data.length === 0) return ''
+  if (data.length >= 2 && data[0] === 0xff && data[1] === 0xfe) {
+    return data.subarray(2).toString('utf16le')
+  }
+  if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+    return data.subarray(3).toString('utf8')
+  }
+  if (looksLikeUtf16Le(data)) return data.toString('utf16le').replace(/^\uFEFF/, '')
+  const utf8 = data.toString('utf8')
+  if (!utf8.includes('\uFFFD')) return utf8
+  try {
+    return new TextDecoder('gbk').decode(data)
+  } catch {
+    return utf8
+  }
+}
+
+function looksLikeUtf16Le(data: Buffer): boolean {
+  if (data.length < 4 || data.length % 2 !== 0) return false
+  const sample = data.subarray(0, Math.min(data.length, 64))
+  let zeros = 0
+  let pairs = 0
+  for (let index = 1; index < sample.length; index += 2) {
+    pairs += 1
+    if (sample[index] === 0) zeros += 1
+  }
+  return pairs >= 2 && zeros / pairs >= 0.8
+}
+
+export function audioAppsFromWindowsProcesses(
+  rows: WindowsProcessRow[],
+  selfPid = process.pid
+): AudioApp[] {
   const byName = new Map<string, AudioApp>()
   for (const row of rows) {
-    if (!row?.ProcessName || row.Id === process.pid) continue
+    if (!row?.ProcessName || row.Id === selfPid) continue
     const id = row.ProcessName.toLowerCase()
     if (id === 'dreamcode' || byName.has(id)) continue
     const label = row.Description?.trim() || row.ProcessName
@@ -181,6 +210,45 @@ async function listWindowsApps(): Promise<AudioApp[]> {
     })
   }
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function windowsListFailure(error: unknown): Error {
+  const stderr = decodePowerShellText((error as { stderr?: Buffer | string }).stderr).trim()
+  const line = stderr
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find(Boolean)
+  if (line) return new Error(`读取正在运行的软件失败：${line}`)
+  const message = error instanceof Error ? error.message : String(error)
+  return new Error(`读取正在运行的软件失败：${message}`)
+}
+
+async function listWindowsApps(): Promise<AudioApp[]> {
+  let stdout: Buffer | string
+  try {
+    ;({ stdout } = await execFileAsync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        buildWindowsProcessListScript()
+      ],
+      { timeout: 15_000, windowsHide: true, encoding: 'buffer', maxBuffer: 4 * 1024 * 1024 }
+    ))
+  } catch (error) {
+    throw windowsListFailure(error)
+  }
+  const trimmed = decodePowerShellText(stdout).trim()
+  if (!trimmed) return []
+  try {
+    const parsed = JSON.parse(trimmed) as WindowsProcessRow | WindowsProcessRow[]
+    return audioAppsFromWindowsProcesses(Array.isArray(parsed) ? parsed : [parsed])
+  } catch {
+    throw new Error(`应用列表解析失败：${trimmed.slice(0, 120)}`)
+  }
 }
 
 export async function listAudioApps(): Promise<AudioApp[]> {
