@@ -388,7 +388,7 @@ test('legacy application helpers still accept bare started and resample SCK floa
   await capture.stop()
 })
 
-test('cancelled A send cannot submit or remove replacement B transcript', async () => {
+test('cleared A send cannot submit or remove replacement B transcript', async () => {
   const oldStt = deferred()
   let calls = 0
   const f = voiceFixture(() => (++calls === 1 ? oldStt.promise : Promise.resolve('B text')))
@@ -404,7 +404,8 @@ test('cancelled A send cannot submit or remove replacement B transcript', async 
   })
   const sending = f.voice.sendNow()
   await tick()
-  await f.voice.cancelListening()
+  f.voice.clearSession()
+  await f.voice.toggleListening()
   f.voice.startListening()
   const b = f.commands.at(-1).sessionId
   f.call('voice:captureStarted', b)
@@ -422,6 +423,30 @@ test('cancelled A send cannot submit or remove replacement B transcript', async 
   assert.equal(f.snapshot().segments.length, 1)
   assert.equal(f.snapshot().segments[0].text, 'B text')
   await f.retire()
+})
+
+test('stop shortcut keeps the transcript unsent until an explicit send', async () => {
+  const f = voiceFixture(() => Promise.resolve('kept line'))
+  f.voice.startListening()
+  const id = f.commands.at(-1).sessionId
+  f.call('voice:captureStarted', id)
+  f.call('voice:pushSegment', {
+    sessionId: id,
+    seq: 1,
+    wav: new Uint8Array([0]),
+    startedAt: 0,
+    durationMs: 1000
+  })
+  await tick()
+  await f.voice.toggleListening()
+  assert.equal(f.snapshot().captureState, 'idle')
+  assert.equal(f.snapshot().segments.length, 1)
+  assert.equal(f.snapshot().segments[0].text, 'kept line')
+  assert.equal(f.answers.length, 0, 'stopping must not send the transcript')
+  assert.equal(f.commands.at(-1).type, 'stop')
+  await f.voice.sendNow()
+  assert.equal(f.answers.length, 1)
+  assert.equal(f.answers[0].at(-1).content, 'kept line')
 })
 
 test('voice send freezes segment IDs and leaves newly captured pending segments intact', async () => {

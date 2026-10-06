@@ -196,14 +196,14 @@ function EmptyTip() {
         开始监听会议音频
       </div>
       <div className="text-sm text-center leading-6">
-        面试官说话时会逐句转成文字；再按一次同一快捷键停止监听并把内容发给大模型解答。
+        面试官说话时会逐句转成文字；再按一次同一快捷键停止监听，识别内容会留在待发送区。
         <br />
         按
         <ShortcutRenderer
           shortcut={shortcuts.voiceSendNow.key}
           className="mx-1 scale-90 inline-block"
         />
-        可以先发送已识别内容、继续监听。
+        可以把已识别内容发给大模型（监听中发送后会继续监听）。
         <br />
         只想问其中一句：点击识别记录（Shift+点击多选），或用
         <ShortcutRenderer
@@ -411,10 +411,10 @@ function VoiceStatusBar({
           className="h-7 px-2 text-xs"
           disabled={busy}
           onClick={() => window.api.voiceToggleListening()}
-          title={listening ? '停止监听并发送' : '开始监听'}
+          title={listening ? '停止监听' : '开始监听'}
         >
           {listening ? <MicOff className="w-4 h-4 mr-1" /> : <Mic className="w-4 h-4 mr-1" />}
-          {listening ? '停止并发送' : '开始监听'}
+          {listening ? '停止监听' : '开始监听'}
           <ShortcutRenderer shortcut={shortcuts.toggleVoiceListening.key} className={hint} />
         </Button>
         {(listening || hasPending) && (
@@ -442,20 +442,6 @@ function VoiceStatusBar({
             <SendHorizontal className="w-4 h-4 mr-1" />
             {hasSelection ? '发送选中' : '发送最新一句'}
             <ShortcutRenderer shortcut={shortcuts.voiceSendSelected.key} className={hint} />
-          </Button>
-        )}
-        {(listening || hasPending) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs"
-            disabled={busy}
-            onClick={() => window.api.voiceCancel()}
-            title="停止监听并丢弃未发送内容"
-          >
-            <X className="w-4 h-4 mr-1" />
-            取消
-            <ShortcutRenderer shortcut={shortcuts.cancelVoiceListening.key} className={hint} />
           </Button>
         )}
         {hasHistory && (

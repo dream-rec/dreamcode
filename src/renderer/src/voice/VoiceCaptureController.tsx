@@ -95,7 +95,7 @@ export function VoiceCaptureController() {
         if (sessionRef.current?.id === command.sessionId) sessionRef.current.session?.flush()
         await window.api.voiceFlushed(command.sessionId, command.requestId)
       } else {
-        if (sessionRef.current?.id === command.sessionId) await stopSession(!command.discard)
+        if (sessionRef.current?.id === command.sessionId) await stopSession(true)
         await window.api.voiceCaptureStopped(command.sessionId, command.requestId)
       }
     })

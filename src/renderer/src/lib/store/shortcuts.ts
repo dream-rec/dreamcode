@@ -66,11 +66,6 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     category: 'Voice Assistant'
   },
   voiceSendNow: { action: 'voiceSendNow', key: 'Alt+Shift+L', category: 'Voice Assistant' },
-  cancelVoiceListening: {
-    action: 'cancelVoiceListening',
-    key: 'Alt+,',
-    category: 'Voice Assistant'
-  },
   clearVoiceSession: {
     action: 'clearVoiceSession',
     key: 'Alt+Shift+,',
@@ -88,6 +83,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
   backToCoderPage: {
     action: 'backToCoderPage',
     key: 'CommandOrControl+R',
+    category: 'Navigation'
+  },
+  backToVoicePage: {
+    action: 'backToVoicePage',
+    key: 'Alt+,',
     category: 'Navigation'
   },
   switchToCard1: { action: 'switchToCard1', key: 'CommandOrControl+1', category: 'Memory Cards' },
@@ -182,7 +182,7 @@ export const useShortcutsStore = create<ShortcutsStore>()(
     }),
     {
       name: 'dreamcode-shortcuts',
-      version: 10,
+      version: 11,
       migrate: (state: unknown) => {
         if (!isPersistedShortcutsState(state) || !state.shortcuts) return state as ShortcutsStore
         // 合并新增默认项；同时丢弃已下线的动作（例如更名前的 openMemoryCards），

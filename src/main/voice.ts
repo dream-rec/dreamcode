@@ -27,7 +27,7 @@ import {
  * Voice assistant state machine (single source of truth lives here).
  *
  *   renderer capture ──segments──▶ main STT ──text──▶ pending transcript
- *   shortcut "stop & send" / "send now" ──▶ pending transcript ──▶ LLM stream ──▶ renderer
+ *   shortcut "send now" ──▶ pending transcript ──▶ LLM stream ──▶ renderer
  *   shortcut "select prev/next" + "send selected" ──▶ chosen lines only ──▶ LLM stream
  *
  * Per-app capture: the renderer asks main to spawn a native helper (see app-audio.ts) and
@@ -178,7 +178,7 @@ export function startListening(): boolean {
   return true
 }
 
-async function stopListening(discard: boolean): Promise<void> {
+async function stopListening(): Promise<void> {
   if (retiringCapture) return retiringCapture
   const id = activeCaptureId
   if (!id) return
@@ -188,25 +188,19 @@ async function stopListening(discard: boolean): Promise<void> {
   broadcast()
   const requestId = nextRequestId('stop')
   const ack = waitForAck(requestId, 5000)
-  if (!sendCaptureCommand({ type: 'stop', sessionId: id, requestId, discard }))
-    resolveAck(requestId)
+  if (!sendCaptureCommand({ type: 'stop', sessionId: id, requestId })) resolveAck(requestId)
   retiringCapture = (async () => {
     await stopAppCapture(id)
     const acknowledged = await ack
     if (activeCaptureId === id) {
       if (!acknowledged) {
-        setError('采集停止确认超时，请再次保存或取消监听重试')
+        setError('采集停止确认超时，请再次按停止快捷键重试')
         throw new Error('采集停止确认超时，尚未确认旧音源已释放')
       }
       activeCaptureId = null
       if (captureLease?.id === id) captureLease = null
       snapshot.captureState = 'idle'
       snapshot.captureNotice = null
-      if (discard) {
-        snapshot.segments = []
-        snapshot.selection = null
-        pendingTranscriptions.clear()
-      }
       broadcast()
     }
   })().finally(() => {
@@ -219,7 +213,7 @@ async function stopListening(discard: boolean): Promise<void> {
 async function retireCapture(): Promise<void> {
   sendGeneration++
   if (activeCaptureId) {
-    await stopListening(false)
+    await stopListening()
   } else if (captureLease) {
     const id = captureLease.id
     getMainWindow()?.webContents.send('voice-app-ended', {
@@ -233,20 +227,18 @@ async function retireCapture(): Promise<void> {
 
 onCaptureTargetChange(retireCapture)
 
-/** Shortcut: idle → start listening; listening → stop listening and send the transcript. */
+/** Shortcut: idle → start listening; listening → stop listening and keep the transcript unsent. */
 export async function toggleListening(): Promise<void> {
   if (snapshot.captureState === 'idle') {
     startListening()
     return
   }
   if (snapshot.captureState === 'stopping' && !retiringCapture) {
-    await stopListening(false)
+    await stopListening()
     return
   }
   if (snapshot.captureState === 'listening') {
-    const generation = ++sendGeneration
-    await stopListening(false)
-    await sendPendingTranscript(generation)
+    await stopListening()
   }
 }
 
@@ -267,19 +259,6 @@ export async function sendNow(): Promise<void> {
     }
   }
   await sendPendingTranscript(generation)
-}
-
-/** Shortcut: stop listening and throw away the un-sent transcript. */
-export async function cancelListening(): Promise<void> {
-  sendGeneration++
-  if (snapshot.captureState === 'idle') {
-    if (snapshot.segments.length) {
-      snapshot.segments = []
-      broadcast()
-    }
-    return
-  }
-  await stopListening(true)
 }
 
 /** Clears transcript, answers and LLM conversation history (listening state is untouched). */
@@ -614,7 +593,6 @@ export function initVoice(): void {
 ipcMain.handle('voice:getSnapshot', () => structuredClone(snapshot))
 ipcMain.handle('voice:toggleListening', () => toggleListening())
 ipcMain.handle('voice:sendNow', () => sendNow())
-ipcMain.handle('voice:cancel', () => cancelListening())
 ipcMain.handle('voice:clearSession', () => clearSession())
 ipcMain.handle('voice:stopAnswer', () => stopAnswer())
 ipcMain.handle('voice:dismissError', () => setError(null))

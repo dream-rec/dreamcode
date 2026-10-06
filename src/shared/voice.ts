@@ -63,7 +63,7 @@ export type VoiceCaptureOwner = 'voice' | 'test'
 export type VoiceCaptureCommand =
   | { type: 'start'; sessionId: string; requestId: string; config: VoiceCaptureConfig }
   | { type: 'flush'; sessionId: string; requestId: string }
-  | { type: 'stop'; sessionId: string; requestId: string; discard: boolean }
+  | { type: 'stop'; sessionId: string; requestId: string }
 
 export interface VoiceSegmentPayload {
   sessionId: string

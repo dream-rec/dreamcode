@@ -205,7 +205,6 @@ const api = {
   voiceGetSnapshot: (): Promise<VoiceSnapshot> => ipcRenderer.invoke('voice:getSnapshot'),
   voiceToggleListening: () => ipcRenderer.invoke('voice:toggleListening'),
   voiceSendNow: () => ipcRenderer.invoke('voice:sendNow'),
-  voiceCancel: () => ipcRenderer.invoke('voice:cancel'),
   voiceClearSession: () => ipcRenderer.invoke('voice:clearSession'),
   voiceStopAnswer: () => ipcRenderer.invoke('voice:stopAnswer'),
   voiceDismissError: () => ipcRenderer.invoke('voice:dismissError'),

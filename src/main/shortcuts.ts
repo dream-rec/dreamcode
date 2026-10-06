@@ -103,9 +103,6 @@ const callbacks: Record<string, () => void> = {
   voiceSendNow: async () => {
     await voice.sendNow()
   },
-  cancelVoiceListening: async () => {
-    await voice.cancelListening()
-  },
   clearVoiceSession: () => {
     voice.clearSession()
   },
@@ -143,6 +140,12 @@ const callbacks: Record<string, () => void> = {
     const mainWindow = global.mainWindow
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('navigate-coder-page')
+  },
+
+  backToVoicePage: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.webContents.send('navigate-voice-page')
   },
 
   switchToCard1: () => {

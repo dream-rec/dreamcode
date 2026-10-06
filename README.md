@@ -93,7 +93,7 @@ npm run build:mac    # 或 build:win / build:linux
 2. **截屏**：快捷键截取屏幕题目，可多张叠加
 3. **解题**：快捷键发送给模型，正文流式返回思路与代码
 4. **记忆卡片**：预存常用提示与模板，快捷键直接调出
-5. **语音助手**：设置页选好语音识别协议（`SenseVoice` / `OpenAI` / `Groq Whisper` / `grok2api`，选项名自带请求路径，也可填任意 OpenAI 兼容服务），按 `Alt+L` 开始监听会议音频，面试官的话会逐句转成文字；再按一次 `Alt+L` 停止并发送给大模型，`Alt+Shift+L` 发送后继续监听。只想问其中一句时，用 `Alt+↑`/`Alt+↓` 或鼠标在识别记录里选中，再按 `Alt+/` 只发送选中的断句。系统音频可只采集指定软件（Windows 10 2004+ / macOS 13+，需屏幕录制权限）；macOS 上不可用时装 [BlackHole](https://existential.audio/blackhole/) 改用「输入设备」。详见 [docs/voice-assistant-design.md](docs/voice-assistant-design.md)
+5. **语音助手**：设置页选好语音识别协议（`SenseVoice` / `OpenAI` / `Groq Whisper` / `grok2api`，选项名自带请求路径，也可填任意 OpenAI 兼容服务），按 `Alt+L` 开始监听会议音频，面试官的话会逐句转成文字；再按一次 `Alt+L` 停止监听（识别内容保留在待发送区，不会自动发送），`Alt+Shift+L` 发送给大模型并继续监听。只想问其中一句时，用 `Alt+↑`/`Alt+↓` 或鼠标在识别记录里选中，再按 `Alt+/` 只发送选中的断句。系统音频可只采集指定软件（Windows 10 2004+ / macOS 13+，需屏幕录制权限）；macOS 上不可用时装 [BlackHole](https://existential.audio/blackhole/) 改用「输入设备」。详见 [docs/voice-assistant-design.md](docs/voice-assistant-design.md)
 
 支持的服务商：[硅基流动](https://cloud.siliconflow.cn/i/SG8C0772)、[OpenRouter](https://openrouter.ai/)、OpenAI 官方、Anthropic 官方等，任何 OpenAI 兼容网关均可。
 

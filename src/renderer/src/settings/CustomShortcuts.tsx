@@ -108,18 +108,13 @@ export function CustomShortcuts() {
           <h3 className="text-sm text-gray-500 dark:text-gray-400">语音助手</h3>
           <Shortcut
             label="开始 / 停止监听"
-            description="第一次按开始监听，再按一次停止监听并把识别内容发给大模型"
+            description="第一次按开始监听，再按一次停止监听；识别内容保留在待发送区，不会自动发送"
             shortcut="toggleVoiceListening"
           />
           <Shortcut
             label="发送并继续监听"
-            description="把目前识别到的内容发出去，同时继续监听后面的话"
+            description="把目前识别到的内容发给大模型，监听中发送后继续监听"
             shortcut="voiceSendNow"
-          />
-          <Shortcut
-            label="取消监听"
-            description="停止监听并丢弃未发送的内容"
-            shortcut="cancelVoiceListening"
           />
           <Shortcut
             label="清空语音对话"
@@ -167,6 +162,7 @@ export function CustomShortcuts() {
           <Shortcut label="向上翻页" shortcut="pageUp" />
           <Shortcut label="向下翻页" shortcut="pageDown" />
           <Shortcut label="返回主页面" shortcut="backToCoderPage" />
+          <Shortcut label="返回监听页面" shortcut="backToVoicePage" />
         </div>
 
         {/* Memory Cards */}

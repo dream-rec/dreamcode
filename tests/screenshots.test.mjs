@@ -341,7 +341,7 @@ test('text follow-up failure is truthful; later screenshot retains the actual fa
   assert.deepEqual(images(f.requests[2].messages.at(-1)), ['image-2'])
 })
 
-test('v10 migration removes obsolete manual actions and preserves all other custom bindings', () => {
+test('shortcut migration drops obsolete manual actions and preserves all other custom bindings', () => {
   let options
   const load = createLoader({
     zustand: { create: () => (initializer) => initializer(() => {}) },
@@ -354,13 +354,14 @@ test('v10 migration removes obsolete manual actions and preserves all other cust
     '@/lib/utils/env': { isMac: true }
   })
   load('src/renderer/src/lib/store/shortcuts.ts')
-  assert.equal(options.version, 10)
-  for (const version of [7, 8, 9]) {
+  assert.equal(options.version, 11)
+  for (const version of [7, 8, 9, 10]) {
     const previous = {
       shortcuts: {
         appendScreenshot: { action: 'appendScreenshot', key: 'Control+8' },
         takeScreenshot: { action: 'takeScreenshot', key: 'Control+9' },
         toggleVoiceListening: { action: 'toggleVoiceListening', key: 'Control+L' },
+        cancelVoiceListening: { action: 'cancelVoiceListening', key: 'Control+,' },
         followUpScreenshot: { action: 'followUpScreenshot', key: 'Alt+F' },
         sendScreenshots: { action: 'sendScreenshots', key: 'Alt+S' },
         openMemoryCards: { action: 'openMemoryCards', key: 'CommandOrControl+R' }
@@ -370,6 +371,8 @@ test('v10 migration removes obsolete manual actions and preserves all other cust
     assert.equal(next.shortcuts.appendScreenshot.key, 'Control+8')
     assert.equal(next.shortcuts.takeScreenshot.key, 'Control+9')
     assert.equal(next.shortcuts.toggleVoiceListening.key, 'Control+L')
+    assert.equal(next.shortcuts.backToVoicePage.key, 'Alt+,')
+    assert.equal(next.shortcuts.cancelVoiceListening, undefined)
     assert.equal(next.shortcuts.followUpScreenshot, undefined)
     assert.equal(next.shortcuts.sendScreenshots, undefined)
     assert.equal(next.shortcuts.openMemoryCards, undefined)
