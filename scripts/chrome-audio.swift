@@ -166,8 +166,10 @@ struct ChromeTarget {
   // Several --user-data-dir instances can share one installation. Keep every verified root's
   // PID/start identity; never select an arbitrary instance or admit another installation.
   static func resolve(_ applications: [ChromeApplicationIdentity]) throws -> ChromeTarget {
-    guard let first = applications.first,
-          Set(applications.map { $0.bundlePath }).count == 1 else {
+    guard let first = applications.first else {
+      throw NativeAudioError(message: "Google Chrome 没有在运行，请先打开 Chrome 再开始监听")
+    }
+    guard Set(applications.map { $0.bundlePath }).count == 1 else {
       throw NativeAudioError(message: "找不到唯一的稳定版 Chrome 安装，请只保留同一安装目录的 Chrome 运行后重试")
     }
     guard applications.allSatisfy({
@@ -678,12 +680,16 @@ final class SystemAudioFallback: NSObject, SCStreamOutput, SCStreamDelegate {
   }
 
   // 有界加载共享内容：SCK 回调缺失时按失败处理，绝不静默挂起。
+  // 超时回调就运行在 state 上，若在 settle 里对同一队列 sync 会直接死锁崩溃（SIGILL），
+  // 因此收敛标记用锁：任意队列调用都只放行第一个结果。
   static func loadContent(completion: @escaping (Result<SCShareableContent, Error>) -> Void) {
-    let state = DispatchQueue(label: "audio-tap.fallback-load")
+    let lock = NSLock()
     var settled = false
     let settle: (Result<SCShareableContent, Error>) -> Void = { result in
-      var first = false
-      state.sync { first = !settled; settled = true }
+      lock.lock()
+      let first = !settled
+      settled = true
+      lock.unlock()
       if first { completion(result) }
     }
     Task {
@@ -694,7 +700,7 @@ final class SystemAudioFallback: NSObject, SCStreamOutput, SCStreamDelegate {
         settle(.failure(error))
       }
     }
-    state.asyncAfter(deadline: .now() + 20) {
+    DispatchQueue.global().asyncAfter(deadline: .now() + 20) {
       settle(.failure(NativeAudioError(message: "读取系统音频内容超时（请检查屏幕与系统音频录制权限）")))
     }
   }

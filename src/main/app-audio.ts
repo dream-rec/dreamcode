@@ -554,12 +554,14 @@ export async function startAppCapture(
         handlers.onEnded(error.message)
       }
     })
-    child.on('exit', (code) => {
-      diag('helper exit', { code, stopped, stderr: stderrText.trim().slice(-2000) })
+    child.on('exit', (code, signal) => {
+      diag('helper exit', { code, signal, stopped, stderr: stderrText.trim().slice(-2000) })
       if (stopped) return
       const reason =
         parseHelperError(stderrText) ??
-        (code === 0 ? '被监听的应用已退出' : `音频采集程序异常退出（${code}）`)
+        (code === 0
+          ? '被监听的应用已退出'
+          : `音频采集程序异常退出（${signal ?? code ?? '未知原因'}）`)
       if (!started) failStart(reason)
       else {
         stopped = true

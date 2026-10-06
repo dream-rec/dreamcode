@@ -122,6 +122,7 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
                   className={selectClassName}
                   value={value.audioAppId}
                   disabled={!APP_CAPTURE_SUPPORTED}
+                  onFocus={() => void refreshApps()}
                   onChange={(event) => selectApp(event.target.value)}
                 >
                   <option value="">全部系统声音</option>
@@ -147,6 +148,9 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
             error={appsError}
           />
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          列表只包含正在运行的软件：先打开要监听的软件（例如 Google Chrome），再点右侧刷新。
+        </p>
       </section>
 
       {/* STT */}
