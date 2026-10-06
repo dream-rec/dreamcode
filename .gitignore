@@ -9,6 +9,10 @@ nul
 .claude
 .trellis
 AGENTS.md
+agents.md
+tests/
+test/
+*.tsbuildinfo
 .serena
 .spec-workflow
 log
