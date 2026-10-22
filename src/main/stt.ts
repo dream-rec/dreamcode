@@ -1,4 +1,5 @@
-import { FormData, ProxyAgent, fetch as undiciFetch } from 'undici'
+import { FormData, fetch as undiciFetch } from 'undici'
+import { requestDispatcher } from './direct-fetch'
 import type { VoiceSttConfig } from '../shared/settings'
 import { extractTranscriptText, joinTranscriptionURL, qwenAsrRequestBody } from '../shared/stt'
 import { getExtraHeaders } from './ai'
@@ -46,15 +47,14 @@ export async function transcribeAudio(
   const timeoutSignal = AbortSignal.timeout(STT_TIMEOUT_MS)
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
 
-  // Always go through undici's fetch so its FormData/Blob implementation and the
-  // optional proxy dispatcher are used consistently.
-  const proxyUrl = config.proxyUrl.trim()
+  // Always pass a dispatcher. With none, undici and Electron follow the system
+  // proxy and Tailscale addresses never leave the proxy.
   const response = await undiciFetch(url, {
     method: 'POST',
     headers,
     body,
     signal: combinedSignal,
-    dispatcher: proxyUrl ? new ProxyAgent(proxyUrl) : undefined
+    dispatcher: requestDispatcher(config.proxyUrl)
   })
 
   const raw = await response.text()

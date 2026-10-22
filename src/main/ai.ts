@@ -1,10 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { streamText, type ModelMessage } from 'ai'
+import { streamText, type LanguageModel, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
-import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { pickProviderConfig, type ProviderConfig } from '../shared/settings'
+import { createRequestFetch } from './direct-fetch'
 import { settings } from './settings'
 
 export const PROMPT_SYSTEM = readFileSync(join(import.meta.dirname, 'prompts.md'), 'utf-8').trim()
@@ -24,14 +24,6 @@ function getAnthropicBaseURL(url: string | undefined): string | undefined {
   const trimmed = url.replace(/\/+$/, '')
   if (trimmed.endsWith('/v1')) return trimmed
   return trimmed + '/v1'
-}
-
-type UndiciFetchArgs = Parameters<typeof undiciFetch>
-
-function createProxyFetch(proxyUrl: string): typeof globalThis.fetch {
-  const dispatcher = new ProxyAgent(proxyUrl)
-  return ((input: UndiciFetchArgs[0], init?: UndiciFetchArgs[1]) =>
-    undiciFetch(input, { ...init, dispatcher })) as unknown as typeof globalThis.fetch
 }
 
 export function getExtraHeaders(rawHeaders: string): Record<string, string> | undefined {
@@ -57,8 +49,8 @@ export function getExtraHeaders(rawHeaders: string): Record<string, string> | un
 }
 
 /** Build an AI SDK language model from any ProviderConfig (Provider group or the voice LLM). */
-export function createLanguageModel(config: ProviderConfig) {
-  const proxyFetch = config.proxyUrl ? createProxyFetch(config.proxyUrl) : undefined
+export function createLanguageModel(config: ProviderConfig): LanguageModel {
+  const proxyFetch = createRequestFetch(config.proxyUrl)
   const headers = getExtraHeaders(config.extraHeaders)
 
   if (config.apiProvider === 'anthropic') {

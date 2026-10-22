@@ -128,20 +128,46 @@
   scrollbar-width: thin;
 }
 
+/* Card groups and card body each scroll inside the page, so scrolling a long
+   note does not push the group list out of view. */
+.app-content.memory-cards-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pane-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: rgb(156 163 175 / 0.75) transparent;
+  scrollbar-width: thin;
+}
+
+.memory-cards-body textarea {
+  field-sizing: fixed;
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
+}
+
 .voice-lazy {
   content-visibility: auto;
   contain-intrinsic-size: auto 96px;
 }
 
-.app-content::-webkit-scrollbar {
+.app-content::-webkit-scrollbar,
+.pane-scroll::-webkit-scrollbar {
   width: 8px;
 }
 
-.app-content::-webkit-scrollbar-track {
+.app-content::-webkit-scrollbar-track,
+.pane-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.app-content::-webkit-scrollbar-thumb {
+.app-content::-webkit-scrollbar-thumb,
+.pane-scroll::-webkit-scrollbar-thumb {
   background: rgb(156 163 175 / 0.75);
   border-radius: 9999px;
   border: 2px solid transparent;
@@ -158,15 +184,22 @@
   scrollbar-color: rgb(107 114 128 / 0.9) transparent;
 }
 
-.dark .app-content::-webkit-scrollbar-track {
+.dark .pane-scroll {
+  scrollbar-color: rgb(107 114 128 / 0.9) transparent;
+}
+
+.dark .app-content::-webkit-scrollbar-track,
+.dark .pane-scroll::-webkit-scrollbar-track {
   background: rgb(24 24 27 / 0.55);
 }
 
-.dark .app-content::-webkit-scrollbar-thumb {
+.dark .app-content::-webkit-scrollbar-thumb,
+.dark .pane-scroll::-webkit-scrollbar-thumb {
   background: rgb(107 114 128 / 0.9);
   border-color: rgb(24 24 27 / 0.55);
 }
 
-.dark .app-content::-webkit-scrollbar-thumb:hover {
+.dark .app-content::-webkit-scrollbar-thumb:hover,
+.dark .pane-scroll::-webkit-scrollbar-thumb:hover {
   background: rgb(156 163 175 / 0.95);
 }

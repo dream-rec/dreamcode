@@ -1,6 +1,7 @@
 import './user-data-path'
+import './direct-fetch'
 import 'dotenv/config'
-import { app, BrowserWindow, globalShortcut } from 'electron'
+import { app, BrowserWindow, globalShortcut, session } from 'electron'
 
 type AbortLikeError = {
   name?: string
@@ -37,7 +38,11 @@ import { initAutoUpdater } from './auto-updater'
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Chromium otherwise uses the OS proxy for every request. Provider calls
+  // opt into a proxy themselves; everything else stays direct for Tailscale.
+  await session.defaultSession.setProxy({ mode: 'direct' })
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.dreamrec.dreamcode')
 

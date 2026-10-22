@@ -1,4 +1,4 @@
-import { memo, startTransition, useEffect, useRef, useState } from 'react'
+import { memo, startTransition, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { OpenVoiceButton } from '@/components/OpenVoiceButton'
 import { useRegisterPageScroll } from '@/lib/use-page-scroll'
 import { useNavigate, useLocation } from 'react-router'
@@ -58,6 +58,13 @@ function MemoryCardsPage() {
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? cards[0]
   const selectedCardIndex = cards.findIndex((card) => card.id === selectedCard?.id)
   const draggingCard = cards.find((card) => card.id === draggingCardId) ?? null
+
+  useLayoutEffect(() => {
+    const scroller = contentRef.current
+    if (!scroller) return
+    scroller.scrollTop = 0
+    scroller.querySelector('textarea')?.scrollTo({ top: 0 })
+  }, [contentRef, selectedCard?.id])
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -151,11 +158,11 @@ function MemoryCardsPage() {
         </div>
       </div>
 
-      <div ref={contentRef} className="app-content px-6 py-4 pb-10">
-        <div className="flex gap-4 items-start">
+      <div className="app-content memory-cards-body px-6 py-4">
+        <div className="flex min-h-0 flex-1 gap-4">
           {showCardPanel && (
-            <aside className="w-[240px] shrink-0 rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/40 backdrop-blur-sm p-3">
-              <div className="flex items-center justify-between mb-3">
+            <aside className="flex w-[240px] shrink-0 min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/40 backdrop-blur-sm p-3">
+              <div className="mb-3 flex shrink-0 items-center justify-between">
                 <span className="text-xs text-gray-500 dark:text-gray-400">卡片分组</span>
                 <div className="flex items-center gap-1">
                   <Button
@@ -188,104 +195,112 @@ function MemoryCardsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {cards.map((card, index) => {
-                  const isActive = card.id === selectedCard?.id
-                  const isDefault = card.id === defaultCardId
-                  return (
-                    <div
-                      key={card.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => selectCard(card.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          selectCard(card.id)
-                        }
-                      }}
-                      onMouseEnter={() => {
-                        if (!draggingCardId) return
-                        setDragOverCardId(card.id)
-                      }}
-                      onMouseLeave={() => {
-                        if (!draggingCardId) return
-                        setDragOverCardId((prev) => (prev === card.id ? null : prev))
-                      }}
-                      onMouseUp={() => {
-                        if (!draggingCardId) return
-                        if (draggingCardId !== card.id) {
-                          reorderCards(draggingCardId, card.id)
-                        }
-                        setDraggingCardId(null)
-                        setDragOverCardId(null)
-                      }}
-                      className={`relative text-left rounded-lg border p-2 transition-all duration-150 select-none ${isActive ? 'border-gray-900 dark:border-gray-100 shadow-sm' : 'border-gray-300/70 dark:border-gray-700/70 hover:border-gray-500/70 dark:hover:border-gray-500/70'} ${dragOverCardId === card.id ? 'ring-2 ring-blue-500/70 border-blue-500 border-dashed bg-blue-500/10 scale-[1.02]' : ''} ${draggingCardId === card.id ? 'opacity-45' : ''}`}
-                    >
-                      <span
+              <div className="pane-scroll min-h-0 flex-1">
+                <div className="grid grid-cols-2 gap-2">
+                  {cards.map((card, index) => {
+                    const isActive = card.id === selectedCard?.id
+                    const isDefault = card.id === defaultCardId
+                    return (
+                      <div
+                        key={card.id}
                         role="button"
                         tabIndex={0}
-                        data-drag-handle="true"
-                        className="absolute top-1 left-1 rounded p-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing"
-                        title="拖拽排序"
-                        onClick={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => {
-                          e.stopPropagation()
-                          setDraggingCardId(card.id)
-                          setDragOverCardId(card.id)
-                          setDragPointer({ x: e.clientX, y: e.clientY })
-                        }}
-                        onMouseUp={(e) => {
-                          e.stopPropagation()
-                        }}
+                        onClick={() => selectCard(card.id)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            e.stopPropagation()
+                            selectCard(card.id)
                           }
                         }}
-                      >
-                        <GripVertical className="h-3.5 w-3.5" />
-                      </span>
-                      <span
-                        className={`absolute top-1 right-1 rounded p-0.5 ${isDefault ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500 hover:text-amber-500'}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setDefaultCard(card.id)
+                        onMouseEnter={() => {
+                          if (!draggingCardId) return
+                          setDragOverCardId(card.id)
                         }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
+                        onMouseLeave={() => {
+                          if (!draggingCardId) return
+                          setDragOverCardId((prev) => (prev === card.id ? null : prev))
+                        }}
+                        onMouseUp={() => {
+                          if (!draggingCardId) return
+                          if (draggingCardId !== card.id) {
+                            reorderCards(draggingCardId, card.id)
+                          }
+                          setDraggingCardId(null)
+                          setDragOverCardId(null)
+                        }}
+                        className={`relative text-left rounded-lg border p-2 transition-all duration-150 select-none ${isActive ? 'border-gray-900 dark:border-gray-100 shadow-sm' : 'border-gray-300/70 dark:border-gray-700/70 hover:border-gray-500/70 dark:hover:border-gray-500/70'} ${dragOverCardId === card.id ? 'ring-2 ring-blue-500/70 border-blue-500 border-dashed bg-blue-500/10 scale-[1.02]' : ''} ${draggingCardId === card.id ? 'opacity-45' : ''}`}
+                      >
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          data-drag-handle="true"
+                          className="absolute top-1 left-1 rounded p-0.5 text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing"
+                          title="拖拽排序"
+                          onClick={(e) => e.stopPropagation()}
+                          onMouseDown={(e) => {
+                            e.stopPropagation()
+                            setDraggingCardId(card.id)
+                            setDragOverCardId(card.id)
+                            setDragPointer({ x: e.clientX, y: e.clientY })
+                          }}
+                          onMouseUp={(e) => {
+                            e.stopPropagation()
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }
+                          }}
+                        >
+                          <GripVertical className="h-3.5 w-3.5" />
+                        </span>
+                        <span
+                          className={`absolute top-1 right-1 rounded p-0.5 ${isDefault ? 'text-amber-500' : 'text-gray-400 dark:text-gray-500 hover:text-amber-500'}`}
+                          onClick={(e) => {
                             e.stopPropagation()
                             setDefaultCard(card.id)
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        title="设为默认卡片"
-                      >
-                        <Star className="h-3.5 w-3.5" fill={isDefault ? 'currentColor' : 'none'} />
-                      </span>
-                      <div
-                        className="h-14 rounded-md mb-2 flex items-center justify-center text-white font-semibold"
-                        style={{ backgroundColor: card.color }}
-                      >
-                        {index + 1}
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setDefaultCard(card.id)
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          title="设为默认卡片"
+                        >
+                          <Star
+                            className="h-3.5 w-3.5"
+                            fill={isDefault ? 'currentColor' : 'none'}
+                          />
+                        </span>
+                        <div
+                          className="h-14 rounded-md mb-2 flex items-center justify-center text-white font-semibold"
+                          style={{ backgroundColor: card.color }}
+                        >
+                          {index + 1}
+                        </div>
+                        <div className="text-[11px] leading-tight line-clamp-2 text-gray-700 dark:text-gray-300">
+                          {card.title || `记忆卡片 ${index + 1}`}
+                        </div>
                       </div>
-                      <div className="text-[11px] leading-tight line-clamp-2 text-gray-700 dark:text-gray-300">
-                        {card.title || `记忆卡片 ${index + 1}`}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </aside>
           )}
 
-          <main className="min-w-0 flex-1 rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/40 backdrop-blur-sm p-4">
+          <main
+            ref={contentRef}
+            className={`pane-scroll min-h-0 min-w-0 flex-1 rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/40 backdrop-blur-sm p-4 ${isEditMode ? 'flex flex-col' : ''}`}
+          >
             {selectedCard ? (
               <>
-                <div className="mb-3 flex items-center gap-3">
+                <div className={`mb-3 flex items-center gap-3 ${isEditMode ? 'shrink-0' : ''}`}>
                   <div
                     className="h-8 min-w-8 px-2 rounded-md flex items-center justify-center text-xs font-semibold text-white"
                     style={{ backgroundColor: selectedCard.color }}
@@ -313,7 +328,7 @@ function MemoryCardsPage() {
                     value={selectedCard.content}
                     onChange={(e) => updateCardContent(selectedCard.id, e.target.value)}
                     placeholder="输入 Markdown 笔记内容..."
-                    className="w-full min-h-[calc(100vh-190px)] bg-white/80 dark:bg-gray-800/80 font-mono text-sm"
+                    className="w-full min-h-0 flex-1 resize-none field-sizing-fixed bg-white/80 dark:bg-gray-800/80 font-mono text-sm"
                   />
                 ) : paintBody ? (
                   <CardStack cards={cards} selectedId={selectedCard.id} />

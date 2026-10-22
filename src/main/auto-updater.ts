@@ -2,6 +2,7 @@ import { app, dialog, shell } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { ipcMain } from 'electron'
 import { loadConfig } from './config'
+import { createRequestFetch } from './direct-fetch'
 
 const GITHUB_REPO_URL = 'https://github.com/dream-rec/dreamcode'
 const GITHUB_API_LATEST = 'https://api.github.com/repos/dream-rec/dreamcode/releases/latest'
@@ -32,7 +33,7 @@ async function checkForUpdateViaGitHub(): Promise<{
   releaseUrl?: string
 }> {
   try {
-    const response = await fetch(GITHUB_API_LATEST)
+    const response = await createRequestFetch('')(GITHUB_API_LATEST)
     if (!response.ok) return { hasUpdate: false }
     const data = await response.json()
     const latestVersion = (data.tag_name as string).replace(/^v/, '')

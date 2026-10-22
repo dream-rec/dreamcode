@@ -199,6 +199,7 @@ export function GroupSettings({
               label="代理地址"
               value={activeProvider.proxyUrl}
               onChange={(value) => updateProvider({ proxyUrl: value })}
+              placeholder="留空则直连，不使用系统代理"
             />
           </div>
         )}

@@ -224,7 +224,7 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
             onChange={(event) => updateStt({ extraHeaders: event.target.value })}
           />
         </Field>
-        <Field label="代理地址">
+        <Field label="代理地址" hint="留空则直连，不使用系统代理">
           <Input
             value={value.stt.proxyUrl}
             placeholder="http://127.0.0.1:7890"
@@ -351,7 +351,7 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
                 onChange={(event) => updateLlm({ model: event.target.value })}
               />
             </Field>
-            <Field label="代理地址">
+            <Field label="代理地址" hint="留空则直连，不使用系统代理">
               <Input
                 value={value.llm.proxyUrl}
                 onChange={(event) => updateLlm({ proxyUrl: event.target.value })}
