@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { loadConfig, saveConfig } from './config'
-import { normalizeConfig, type AppConfig } from '../shared/settings'
+import { configHasCredentials, normalizeConfig, type AppConfig } from '../shared/settings'
 
 export type AppSettings = AppConfig & {
   opacity: number
@@ -81,6 +81,16 @@ export function activatePromptGroupAt(index: number): boolean {
 }
 
 ipcMain.handle('getAppSettings', () => settings)
+
+ipcMain.handle('importLegacyConfigIfEmpty', (_event, incoming: unknown) => {
+  if (configHasCredentials(settings)) return false
+  if (!configHasCredentials(incoming)) return false
+  const next = normalizeConfig(incoming)
+  Object.assign(settings, next)
+  saveCurrentSettings()
+  notifySettingsChanged()
+  return true
+})
 
 ipcMain.handle('updateAppSettings', (_event, incoming: Partial<AppSettings>) => {
   const update = async (): Promise<AppSettings> => {

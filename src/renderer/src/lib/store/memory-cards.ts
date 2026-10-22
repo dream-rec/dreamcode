@@ -1,12 +1,8 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { normalizeMemoryCards, type MemoryCardRecord } from '../../../../shared/user-profile'
+import { saveMemoryCards } from '../profile-save'
 
-export type MemoryCard = {
-  id: string
-  title: string
-  content: string
-  color: string
-}
+export type MemoryCard = MemoryCardRecord
 
 interface MemoryCardsState {
   cards: MemoryCard[]
@@ -41,20 +37,6 @@ const defaultState: MemoryCardsState = {
   defaultCardId: defaultCard.id
 }
 
-type LegacyPersistedState = {
-  content?: string
-}
-
-type PersistedState = {
-  cards?: MemoryCard[]
-  selectedCardId?: string
-  defaultCardId?: string
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
 function createCard(index: number): MemoryCard {
   const cardNumber = index + 1
   return {
@@ -65,124 +47,83 @@ function createCard(index: number): MemoryCard {
   }
 }
 
-export const useMemoryCardsStore = create<MemoryCardsStore>()(
-  persist(
-    (set, get) => ({
-      ...defaultState,
-      selectCard: (cardId) => {
-        set((state) => {
-          if (!state.cards.some((card) => card.id === cardId)) return state
-          return { selectedCardId: cardId }
-        })
-      },
-      openDefaultCard: () => {
-        const { defaultCardId, cards } = get()
-        const found = cards.some((card) => card.id === defaultCardId)
-        if (!found) return
-        set({ selectedCardId: defaultCardId })
-      },
-      setDefaultCard: (cardId) => {
-        set((state) => {
-          if (!state.cards.some((card) => card.id === cardId)) return state
-          return { defaultCardId: cardId }
-        })
-      },
-      addCard: () => {
-        const state = get()
-        const next = createCard(state.cards.length)
-        set({
-          cards: [...state.cards, next],
-          selectedCardId: next.id
-        })
-        return next.id
-      },
-      removeCard: (cardId) => {
-        set((state) => {
-          if (state.cards.length <= 1 || !state.cards.some((card) => card.id === cardId)) {
-            return state
-          }
+function persistCards(): void {
+  const { cards, selectedCardId, defaultCardId } = useMemoryCardsStore.getState()
+  saveMemoryCards({ cards, selectedCardId, defaultCardId })
+}
 
-          const cards = state.cards.filter((card) => card.id !== cardId)
-          const fallbackId = cards[0].id
-          const selectedCardId = state.selectedCardId === cardId ? fallbackId : state.selectedCardId
-          const defaultCardId = state.defaultCardId === cardId ? fallbackId : state.defaultCardId
-          return { cards, selectedCardId, defaultCardId }
-        })
-      },
-      reorderCards: (draggedCardId, targetCardId) => {
-        set((state) => {
-          if (draggedCardId === targetCardId) return state
+export function hydrateMemoryCards(value: unknown): void {
+  const normalized = normalizeMemoryCards(value)
+  if (!normalized.recognized) return
+  useMemoryCardsStore.setState(normalized.cards)
+}
 
-          const fromIndex = state.cards.findIndex((card) => card.id === draggedCardId)
-          const toIndex = state.cards.findIndex((card) => card.id === targetCardId)
-
-          if (fromIndex < 0 || toIndex < 0) return state
-
-          const cards = [...state.cards]
-          const [moved] = cards.splice(fromIndex, 1)
-          cards.splice(toIndex, 0, moved)
-
-          return { cards }
-        })
-      },
-      updateCardTitle: (cardId, title) => {
-        set((state) => ({
-          cards: state.cards.map((card) => (card.id === cardId ? { ...card, title } : card))
-        }))
-      },
-      updateCardContent: (cardId, content) => {
-        set((state) => ({
-          cards: state.cards.map((card) => (card.id === cardId ? { ...card, content } : card))
-        }))
-      }
-    }),
-    {
-      name: 'dreamcode-memory-cards',
-      version: 2,
-      migrate: (state: unknown, version: number) => {
-        if (!isObject(state)) {
-          return defaultState
-        }
-
-        // From v1 single content to v2 multi cards
-        if (version < 2) {
-          const legacy = state as LegacyPersistedState
-          const migratedCard: MemoryCard = {
-            ...defaultCard,
-            content: legacy.content || defaultCard.content
-          }
-          return {
-            cards: [migratedCard],
-            selectedCardId: migratedCard.id,
-            defaultCardId: migratedCard.id
-          }
-        }
-
-        const next = state as PersistedState
-        const cards =
-          Array.isArray(next.cards) && next.cards.length > 0
-            ? next.cards.map((card) => ({
-                ...card,
-                title: typeof card.title === 'string' ? card.title : ''
-              }))
-            : [defaultCard]
-        const selectedCardId =
-          typeof next.selectedCardId === 'string' &&
-          cards.some((card) => card.id === next.selectedCardId)
-            ? next.selectedCardId
-            : cards[0].id
-        const defaultCardId =
-          typeof next.defaultCardId === 'string' &&
-          cards.some((card) => card.id === next.defaultCardId)
-            ? next.defaultCardId
-            : cards[0].id
-
-        return {
-          cards,
-          selectedCardId,
-          defaultCardId
-        }
-      }
-    }
-  )
-)
+export const useMemoryCardsStore = create<MemoryCardsStore>()((set, get) => ({
+  ...defaultState,
+  selectCard: (cardId) => {
+    const changed =
+      get().cards.some((card) => card.id === cardId) && get().selectedCardId !== cardId
+    if (!changed) return
+    set({ selectedCardId: cardId })
+    persistCards()
+  },
+  openDefaultCard: () => {
+    const { defaultCardId, cards, selectedCardId } = get()
+    if (!cards.some((card) => card.id === defaultCardId) || selectedCardId === defaultCardId) return
+    set({ selectedCardId: defaultCardId })
+    persistCards()
+  },
+  setDefaultCard: (cardId) => {
+    if (!get().cards.some((card) => card.id === cardId) || get().defaultCardId === cardId) return
+    set({ defaultCardId: cardId })
+    persistCards()
+  },
+  addCard: () => {
+    const state = get()
+    const next = createCard(state.cards.length)
+    set({
+      cards: [...state.cards, next],
+      selectedCardId: next.id
+    })
+    persistCards()
+    return next.id
+  },
+  removeCard: (cardId) => {
+    const state = get()
+    if (state.cards.length <= 1 || !state.cards.some((card) => card.id === cardId)) return
+    const cards = state.cards.filter((card) => card.id !== cardId)
+    const fallbackId = cards[0].id
+    set({
+      cards,
+      selectedCardId: state.selectedCardId === cardId ? fallbackId : state.selectedCardId,
+      defaultCardId: state.defaultCardId === cardId ? fallbackId : state.defaultCardId
+    })
+    persistCards()
+  },
+  reorderCards: (draggedCardId, targetCardId) => {
+    const state = get()
+    if (draggedCardId === targetCardId) return
+    const fromIndex = state.cards.findIndex((card) => card.id === draggedCardId)
+    const toIndex = state.cards.findIndex((card) => card.id === targetCardId)
+    if (fromIndex < 0 || toIndex < 0) return
+    const cards = [...state.cards]
+    const [moved] = cards.splice(fromIndex, 1)
+    cards.splice(toIndex, 0, moved)
+    set({ cards })
+    persistCards()
+  },
+  updateCardTitle: (cardId, title) => {
+    if (!get().cards.some((card) => card.id === cardId && card.title !== title)) return
+    set((state) => ({
+      cards: state.cards.map((card) => (card.id === cardId ? { ...card, title } : card))
+    }))
+    persistCards()
+  },
+  updateCardContent: (cardId, content) => {
+    if (!get().cards.some((card) => card.id === cardId && card.content !== content)) return
+    set((state) => ({
+      cards: state.cards.map((card) => (card.id === cardId ? { ...card, content } : card))
+    }))
+    persistCards()
+  }
+}))

@@ -1,3 +1,4 @@
+import './user-data-path'
 import 'dotenv/config'
 import { app, BrowserWindow, globalShortcut } from 'electron'
 
@@ -28,6 +29,7 @@ process.on('uncaughtException', (error) => {
 })
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import './shortcuts'
+import './profile'
 import { createWindow } from './main-window'
 import { initVoice } from './voice'
 import { initAutoUpdater } from './auto-updater'
@@ -37,7 +39,7 @@ import { initAutoUpdater } from './auto-updater'
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.dreamrec.dreamcode')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.

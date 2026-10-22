@@ -28,11 +28,12 @@ export type VoiceAudioSource = 'system'
 export type VoiceLlmMode = 'shared' | 'custom'
 
 /**
- * Speech-to-text service. All but `grok2api` speak the OpenAI-compatible
- * POST {apiBaseURL}/audio/transcriptions; `grok2api` uses POST {apiBaseURL}/stt.
+ * Speech-to-text service. OpenAI-compatible gateways use
+ * POST {apiBaseURL}/audio/transcriptions; `grok2api` uses POST {apiBaseURL}/stt;
+ * Bailian Qwen ASR uses POST {apiBaseURL}/chat/completions.
  * Labels carry the path so the dropdown itself shows which endpoint is called.
  */
-export type VoiceSttProvider = 'siliconflow' | 'openai' | 'groq' | 'grok2api'
+export type VoiceSttProvider = 'siliconflow' | 'openai' | 'groq' | 'grok2api' | 'qwen-asr'
 
 export const VOICE_STT_PROVIDERS: {
   id: VoiceSttProvider
@@ -63,6 +64,12 @@ export const VOICE_STT_PROVIDERS: {
     name: 'grok2api（/stt）',
     apiBaseURL: 'http://127.0.0.1:8000/v1',
     model: 'grok-stt'
+  },
+  {
+    id: 'qwen-asr',
+    name: 'Qwen ASR（/chat/completions）',
+    apiBaseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen3-asr-flash'
   }
 ]
 
@@ -346,6 +353,22 @@ export function normalizeVoiceConfig(value: unknown): VoiceConfig {
     autoOpenPage:
       typeof source.autoOpenPage === 'boolean' ? source.autoOpenPage : fallback.autoOpenPage
   }
+}
+
+export function configHasCredentials(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  const keys: unknown[] = [value.apiKey]
+  if (isRecord(value.voice)) {
+    const voice = value.voice
+    if (isRecord(voice.stt)) keys.push(voice.stt.apiKey)
+    if (isRecord(voice.llm)) keys.push(voice.llm.apiKey)
+  }
+  if (Array.isArray(value.providerGroups)) {
+    for (const group of value.providerGroups) {
+      if (isRecord(group)) keys.push(group.apiKey)
+    }
+  }
+  return keys.some((key) => typeof key === 'string' && key.trim().length > 0)
 }
 
 export function normalizeConfig(value: unknown): AppConfig {

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { HelpSection } from './components'
 import { Shortcuts } from './Shortcuts'
+import { OpenVoiceButton } from '@/components/OpenVoiceButton'
 import { useSettingsStore } from '@/lib/store/settings'
 
 export default function HelpPage() {
@@ -42,25 +43,37 @@ export default function HelpPage() {
   return (
     <>
       {/* Header */}
-      <div id="app-header" className="flex items-center px-3">
+      <div className="app-header flex items-center px-3">
         <div className="actions">
-          <Button variant="ghost" size="icon" asChild className="size-7 hover:bg-black/10 dark:hover:bg-white/10 rounded-md">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            className="size-7 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+          >
             <Link to="/">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
         </div>
-        <h1 className="flex-1 text-center font-medium select-none pr-7">关于</h1>
+        <h1 className="window-drag flex-1 h-full flex items-center justify-center font-medium select-none">
+          关于
+        </h1>
+        <div className="actions">
+          <OpenVoiceButton />
+        </div>
       </div>
 
       {/* Content */}
-      <div id="app-content" className="flex flex-col gap-4 p-8">
+      <div className="app-content flex flex-col gap-4 p-8">
         {/* About */}
         <HelpSection Icon={Info} title="关于 DreamCode">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700 dark:text-gray-300">版本</span>
-              <span className="text-sm font-mono text-gray-800 dark:text-gray-200">v{appVersion}</span>
+              <span className="text-sm font-mono text-gray-800 dark:text-gray-200">
+                v{appVersion}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700 dark:text-gray-300">开源协议</span>
@@ -116,7 +129,10 @@ export default function HelpPage() {
                     )
                   }}
                 />
-                <label htmlFor="auto-check-update" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                <label
+                  htmlFor="auto-check-update"
+                  className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
                   启动时自动检查更新
                 </label>
               </div>

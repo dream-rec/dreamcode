@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -41,7 +42,7 @@ function normalizeMathDelimiters(markdown: string): string {
     .join('')
 }
 
-export default function MarkdownRenderer({ children }: { children: string }) {
+function MarkdownRenderer({ children }: { children: string }) {
   const fontSize = useSettingsStore((s) => s.fontSize)
   const markdown = normalizeMathDelimiters(children)
   return (
@@ -116,3 +117,5 @@ export default function MarkdownRenderer({ children }: { children: string }) {
     </div>
   )
 }
+
+export default memo(MarkdownRenderer)

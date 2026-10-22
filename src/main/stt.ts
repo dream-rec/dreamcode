@@ -1,5 +1,6 @@
 import { FormData, ProxyAgent, fetch as undiciFetch } from 'undici'
 import type { VoiceSttConfig } from '../shared/settings'
+import { extractTranscriptText, joinTranscriptionURL, qwenAsrRequestBody } from '../shared/stt'
 import { getExtraHeaders } from './ai'
 
 const STT_TIMEOUT_MS = 45_000
@@ -7,51 +8,23 @@ const STT_TIMEOUT_MS = 45_000
 export class SttConfigError extends Error {}
 
 function getTranscriptionURL(config: VoiceSttConfig): string {
-  const trimmed = config.apiBaseURL.trim().replace(/\/+$/, '')
-  if (!trimmed) throw new SttConfigError('语音识别 Base URL 未配置')
-  // Grok2API: POST {base}/stt; everything else is OpenAI-compatible.
-  return config.provider === 'grok2api' ? `${trimmed}/stt` : `${trimmed}/audio/transcriptions`
+  try {
+    return joinTranscriptionURL(config.apiBaseURL, config.provider)
+  } catch (error) {
+    throw new SttConfigError(error instanceof Error ? error.message : '语音识别 Base URL 未配置')
+  }
 }
 
-const TEXT_KEYS = ['text', 'transcript', 'formatted_text', 'formattedText'] as const
-const NESTED_KEYS = ['result', 'data', 'output'] as const
-
-function joinTextItems(items: unknown[], separator: string): string {
-  return items
-    .map((item) => {
-      if (!item || typeof item !== 'object') return ''
-      const record = item as Record<string, unknown>
-      const value = record.text ?? record.word
-      return typeof value === 'string' ? value : ''
-    })
-    .join(separator)
-    .trim()
-}
-
-function extractTranscriptText(payload: unknown): string {
-  if (typeof payload === 'string') return payload.trim()
-  if (!payload || typeof payload !== 'object') return ''
-  const record = payload as Record<string, unknown>
-  for (const key of TEXT_KEYS) {
-    if (typeof record[key] === 'string') return (record[key] as string).trim()
-  }
-  // Some gateways nest the result.
-  for (const key of NESTED_KEYS) {
-    if (record[key] && typeof record[key] === 'object') {
-      const text = extractTranscriptText(record[key])
-      if (text) return text
-    }
-  }
-  if (Array.isArray(record.segments)) return joinTextItems(record.segments, '')
-  // Word-level only (e.g. Grok2API with timestamps): words are space separated.
-  if (Array.isArray(record.words)) return joinTextItems(record.words, ' ')
-  return ''
+function wavDataUrl(wav: Uint8Array): string {
+  const bytes = Uint8Array.from(wav)
+  return `data:audio/wav;base64,${Buffer.from(bytes).toString('base64')}`
 }
 
 /**
- * Transcribe one WAV clip with an OpenAI-compatible `/audio/transcriptions` endpoint
- * (OpenAI whisper-1 / gpt-4o-transcribe, SiliconFlow SenseVoice, Groq whisper, ...)
- * or Grok2API's `/stt` endpoint.
+ * Transcribe one WAV clip.
+ * OpenAI-compatible gateways use multipart `POST /audio/transcriptions`.
+ * Grok2API uses multipart `POST /stt`.
+ * Bailian Qwen ASR uses JSON `POST /chat/completions` with a Base64 data URL.
  */
 export async function transcribeAudio(
   wav: Uint8Array,
@@ -62,24 +35,13 @@ export async function transcribeAudio(
   if (!config.model.trim()) throw new SttConfigError('语音识别模型未配置')
 
   const url = getTranscriptionURL(config)
-  // Copy into a plain ArrayBuffer-backed view: IPC may hand us a view over a shared buffer.
-  const bytes = Uint8Array.from(wav)
-  const form = new FormData()
-  form.append('file', new Blob([bytes], { type: 'audio/wav' }), 'segment.wav')
-  form.append('model', config.model.trim())
-  if (config.provider === 'grok2api') {
-    // Formatted text carries punctuation, which reads much better for the LLM. Upstream
-    // rejects format=true without a language (400), so only ask for it when one is pinned.
-    if (config.language.trim()) form.append('format', 'true')
-  } else {
-    form.append('response_format', 'json')
-  }
-  if (config.language.trim()) form.append('language', config.language.trim())
-
   const headers: Record<string, string> = {
     Authorization: `Bearer ${config.apiKey.trim()}`,
     ...(getExtraHeaders(config.extraHeaders) ?? {})
   }
+  const body =
+    config.provider === 'qwen-asr' ? qwenRequestBody(wav, config) : openAiFormBody(wav, config)
+  if (config.provider === 'qwen-asr') headers['Content-Type'] = 'application/json'
 
   const timeoutSignal = AbortSignal.timeout(STT_TIMEOUT_MS)
   const combinedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
@@ -90,7 +52,7 @@ export async function transcribeAudio(
   const response = await undiciFetch(url, {
     method: 'POST',
     headers,
-    body: form,
+    body,
     signal: combinedSignal,
     dispatcher: proxyUrl ? new ProxyAgent(proxyUrl) : undefined
   })
@@ -112,4 +74,31 @@ export async function transcribeAudio(
   } catch {
     return raw.trim()
   }
+}
+
+function qwenRequestBody(wav: Uint8Array, config: VoiceSttConfig): string {
+  return JSON.stringify(
+    qwenAsrRequestBody({
+      model: config.model,
+      audioDataUrl: wavDataUrl(wav),
+      language: config.language
+    })
+  )
+}
+
+function openAiFormBody(wav: Uint8Array, config: VoiceSttConfig): FormData {
+  // Copy into a plain ArrayBuffer-backed view: IPC may hand us a view over a shared buffer.
+  const bytes = Uint8Array.from(wav)
+  const form = new FormData()
+  form.append('file', new Blob([bytes], { type: 'audio/wav' }), 'segment.wav')
+  form.append('model', config.model.trim())
+  if (config.provider === 'grok2api') {
+    // Formatted text carries punctuation, which reads much better for the LLM. Upstream
+    // rejects format=true without a language (400), so only ask for it when one is pinned.
+    if (config.language.trim()) form.append('format', 'true')
+  } else {
+    form.append('response_format', 'json')
+  }
+  if (config.language.trim()) form.append('language', config.language.trim())
+  return form
 }

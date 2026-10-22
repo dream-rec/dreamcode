@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { useSettingsStore } from '@/lib/store/settings'
 import { CustomShortcuts, ResetDefaultShortcuts } from './CustomShortcuts'
+import { OpenVoiceButton } from '@/components/OpenVoiceButton'
 import { GroupSettings } from './GroupSettings'
 import { VoiceSettings } from './VoiceSettings'
 
@@ -82,7 +83,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <div id="app-header" className="flex items-center px-3">
+      <div className="app-header flex items-center px-3">
         <div className="actions">
           <Button
             variant="ghost"
@@ -93,8 +94,11 @@ export default function SettingsPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </div>
-        <h1 className="flex-1 text-center font-medium select-none">设置</h1>
-        <div className="actions">
+        <h1 className="window-drag flex-1 h-full flex items-center justify-center font-medium select-none">
+          设置
+        </h1>
+        <div className="actions flex items-center gap-1">
+          <OpenVoiceButton />
           <Button
             variant="ghost"
             size="icon"
@@ -108,7 +112,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div id="app-content" className="flex flex-col gap-4 p-8">
+      <div className="app-content flex flex-col gap-4 p-8">
         <GroupSettings
           providerGroups={providerGroups}
           promptGroups={promptGroups}

@@ -1,2 +1,4 @@
-export const isMac = navigator.userAgent.includes('Mac')
-export const isWindows = navigator.userAgent.includes('Windows')
+const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+
+export const isMac = userAgent.includes('Mac')
+export const isWindows = userAgent.includes('Windows')

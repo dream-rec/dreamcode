@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import {
   defaultConfig,
   normalizeVoiceConfig,
@@ -7,6 +6,7 @@ import {
   type PromptGroup,
   type VoiceConfig
 } from '../../../../shared/settings'
+import { saveAppearance } from '../profile-save'
 
 export type { ProviderGroup, PromptGroup, VoiceConfig }
 
@@ -62,39 +62,29 @@ const defaultSettings: Settings = {
   voice: normalizeVoiceConfig(defaultConfig.voice)
 }
 
-export const useSettingsStore = create<SettingsStore>()(
-  persist(
-    (set, get) => ({
-      ...defaultSettings,
-      updateSetting: (key, value) => {
-        if (get()[key] !== value) set({ [key]: value })
-      },
-      saveSettings: async (settings) => {
-        const saved = await window.api.updateAppSettings(settings)
-        get().syncSettings(saved)
-      },
-      syncSettings: (settings) => {
-        // Main notifications are inbound only. Keep local appearance and equal nested references.
-        const current = get()
-        const changes = Object.fromEntries(
-          Object.entries(settings).filter(
-            ([key, value]) =>
-              Object.hasOwn(defaultSettings, key) &&
-              !LOCAL_APPEARANCE_KEYS.has(key) &&
-              JSON.stringify(current[key as keyof Settings]) !== JSON.stringify(value)
-          )
-        )
-        if (Object.keys(changes).length) set(changes)
-      }
-    }),
-    {
-      name: 'dreamcode-settings',
-      version: 8,
-      migrate: (persisted: unknown) => {
-        // v8 added the voice assistant block; keep everything else the user had.
-        const state = (persisted ?? {}) as Partial<Settings>
-        return { ...state, voice: normalizeVoiceConfig(state.voice) } as SettingsStore
-      }
-    }
-  )
-)
+export const useSettingsStore = create<SettingsStore>()((set, get) => ({
+  ...defaultSettings,
+  updateSetting: (key, value) => {
+    if (get()[key] === value) return
+    set({ [key]: value })
+    const { theme, opacity, fontSize } = get()
+    saveAppearance({ theme, opacity, fontSize })
+  },
+  saveSettings: async (settings) => {
+    const saved = await window.api.updateAppSettings(settings)
+    get().syncSettings(saved)
+  },
+  syncSettings: (settings) => {
+    // Main notifications are inbound only. Keep local appearance and equal nested references.
+    const current = get()
+    const changes = Object.fromEntries(
+      Object.entries(settings).filter(
+        ([key, value]) =>
+          Object.hasOwn(defaultSettings, key) &&
+          !LOCAL_APPEARANCE_KEYS.has(key) &&
+          JSON.stringify(current[key as keyof Settings]) !== JSON.stringify(value)
+      )
+    )
+    if (Object.keys(changes).length) set(changes)
+  }
+}))

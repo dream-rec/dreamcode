@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, startTransition, useEffect, useRef, useState, type RefObject } from 'react'
 import { useNavigate } from 'react-router'
 import {
   ArrowLeft,
@@ -25,21 +25,90 @@ import {
   type TranscriptSelection,
   type VoiceExchange
 } from '@/lib/store/voice'
+import { getActivePath, subscribeActivePath } from '@/lib/active-path'
+import { useRegisterPageScroll } from '@/lib/use-page-scroll'
 import { LevelMeter } from './LevelMeter'
 
-const SCROLL_OFFSET = 120
+interface VoicePageState {
+  captureState: ReturnType<typeof useVoiceStore.getState>['captureState']
+  answering: boolean
+  segments: TranscriptSegment[]
+  selection: TranscriptSelection | null
+  exchanges: VoiceExchange[]
+  error: string | null
+  captureNotice: string | null
+}
+
+function readVoicePageState(): VoicePageState {
+  const state = useVoiceStore.getState()
+  return {
+    captureState: state.captureState,
+    answering: state.answering,
+    segments: state.segments,
+    selection: state.selection,
+    exchanges: state.exchanges,
+    error: state.error,
+    captureNotice: state.captureNotice
+  }
+}
+
+function sameVoicePageState(prev: VoicePageState, next: VoicePageState): boolean {
+  return (
+    prev.captureState === next.captureState &&
+    prev.answering === next.answering &&
+    prev.segments === next.segments &&
+    prev.selection === next.selection &&
+    prev.exchanges === next.exchanges &&
+    prev.error === next.error &&
+    prev.captureNotice === next.captureNotice
+  )
+}
+
+/**
+ * Coalesce listening updates to one frame. Level ticks are ignored. The hidden
+ * page stays current, so showing it is only a visibility change.
+ */
+function useVoicePageState(): VoicePageState {
+  const [snapshot, setSnapshot] = useState(readVoicePageState)
+  useEffect(() => {
+    let frame = 0
+    let queued = readVoicePageState()
+    const publish = () => {
+      const next = readVoicePageState()
+      if (sameVoicePageState(queued, next)) return
+      queued = next
+      if (frame) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        const latest = queued
+        startTransition(() => {
+          setSnapshot((prev) => (sameVoicePageState(prev, latest) ? prev : latest))
+        })
+      })
+    }
+    publish()
+    const unsubVoice = useVoiceStore.subscribe(publish)
+    const unsubPath = subscribeActivePath(publish)
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      unsubVoice()
+      unsubPath()
+    }
+  }, [])
+  return snapshot
+}
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString('zh-CN', { hour12: false })
 }
 
-export default function VoicePage() {
+function VoicePage() {
   const navigate = useNavigate()
   const { ignoreMouse, syncAppState } = useAppStore()
-  const { captureState, answering, segments, selection, exchanges, error, captureNotice, level } =
-    useVoiceStore()
+  const { captureState, answering, segments, selection, exchanges, error, captureNotice } =
+    useVoicePageState()
   const thresholdDb = useSettingsStore((state) => state.voice.vad.thresholdDb)
-  const contentRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRegisterPageScroll('/voice')
   const stickToBottomRef = useRef(true)
 
   useEffect(() => {
@@ -47,35 +116,13 @@ export default function VoicePage() {
     return () => window.api.removeSyncAppStateListener()
   }, [syncAppState])
 
-  useEffect(() => {
-    window.api.onScrollPageUp(() => {
-      const container = contentRef.current
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop - window.innerHeight + SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    window.api.onScrollPageDown(() => {
-      const container = contentRef.current
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop + window.innerHeight - SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    return () => {
-      window.api.removeScrollPageUpListener()
-      window.api.removeScrollPageDownListener()
-    }
-  }, [])
-
   // Follow the streaming answer unless the user scrolled up to read something.
   useEffect(() => {
+    if (getActivePath() !== '/voice') return
     const container = contentRef.current
     if (!container || !stickToBottomRef.current) return
     container.scrollTop = container.scrollHeight
-  }, [exchanges, segments])
+  }, [contentRef, exchanges, segments])
 
   const handleScroll = () => {
     const container = contentRef.current
@@ -91,19 +138,22 @@ export default function VoicePage() {
 
   return (
     <>
-      <div id="app-header" className="flex items-center justify-between px-3">
+      <div className="app-header flex items-center justify-between px-3">
         <div className={`actions ${ignoreMouse ? 'pointer-events-none' : ''}`}>
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
-            onClick={() => navigate('/')}
+            className="size-8 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              navigate('/')
+            }}
             title="返回解题页"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </div>
-        <div className="font-medium select-none flex items-center gap-2">
+        <div className="window-drag flex-1 h-full flex items-center justify-center gap-2 font-medium select-none">
           语音助手
           {isListening && (
             <span className="inline-flex items-center gap-1 text-xs text-red-500">
@@ -121,8 +171,11 @@ export default function VoicePage() {
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
-            onClick={() => navigate('/settings')}
+            className="size-8 hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              navigate('/settings')
+            }}
             title="设置"
           >
             <SettingsIcon className="h-4 w-4" />
@@ -130,7 +183,7 @@ export default function VoicePage() {
         </div>
       </div>
 
-      <div id="app-content" ref={contentRef} onScroll={handleScroll} className="px-6 py-4 pb-12">
+      <div ref={contentRef} onScroll={handleScroll} className="app-content px-6 py-4 pb-12">
         {error && (
           <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start gap-3">
             <div className="flex-1 min-w-0">
@@ -151,7 +204,6 @@ export default function VoicePage() {
           <TranscriptPanel
             segments={segments}
             selection={selection}
-            level={level}
             thresholdDb={thresholdDb}
             listening={isListening}
             busy={isBusy}
@@ -242,14 +294,12 @@ function getSelectedSeqs(
 function TranscriptPanel({
   segments,
   selection,
-  level,
   thresholdDb,
   listening,
   busy
 }: {
   segments: TranscriptSegment[]
   selection: TranscriptSelection | null
-  level: number
   thresholdDb: number
   listening: boolean
   busy: boolean
@@ -265,95 +315,149 @@ function TranscriptPanel({
   }, [selection?.focus])
 
   return (
-    <div className="mb-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/50 dark:bg-gray-800/50 p-3">
+    <div className="voice-lazy mb-4 rounded-xl border border-gray-200/60 dark:border-gray-700/60 bg-white/50 dark:bg-gray-800/50 p-3">
       <div className="flex items-center gap-3 mb-2">
         <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
           {listening ? '正在监听' : busy ? '处理中…' : '待发送内容'}
         </span>
-        <LevelMeter level={level} thresholdDb={thresholdDb} active={listening} className="flex-1" />
+        <LevelMeter thresholdDb={thresholdDb} active={listening} className="flex-1" />
       </div>
       {segments.length === 0 ? (
         <p className="text-sm text-gray-400">等待语音…</p>
       ) : (
         <>
-          <ul className={`space-y-0.5 ${ignoreMouse ? 'pointer-events-none' : ''}`}>
-            {segments.map((segment) => {
-              const isSelected = selected.has(segment.seq)
-              const selectable = segment.status === 'done'
-              return (
-                <li
-                  key={segment.seq}
-                  ref={segment.seq === selection?.focus ? focusRef : undefined}
-                  className={`flex gap-2 text-sm leading-6 rounded-md px-1.5 -mx-1.5 select-none ${selectable ? 'cursor-pointer' : ''} ${isSelected ? 'bg-blue-500/15 ring-1 ring-blue-500/50' : selectable ? 'hover:bg-black/5 dark:hover:bg-white/5' : ''} ${segment.sent && !isSelected ? 'opacity-50' : ''}`}
-                  onClick={(event) => {
-                    if (selectable) void window.api.voiceSelectSegment(segment.seq, event.shiftKey)
-                  }}
-                >
-                  <span className="text-xs text-gray-400 font-mono pt-1 whitespace-nowrap">
-                    {formatTime(segment.startedAt)}
-                  </span>
-                  {segment.status === 'pending' ? (
-                    <span className="flex items-center gap-2 text-gray-400">
-                      <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-r-2 border-current" />
-                      识别中（{(segment.durationMs / 1000).toFixed(1)}s）
-                    </span>
-                  ) : segment.status === 'error' ? (
-                    <span className="text-red-400 break-words">识别失败：{segment.error}</span>
-                  ) : (
-                    <span className="break-words flex-1">
-                      {segment.text}
-                      {segment.sent && (
-                        <span className="ml-2 text-[10px] text-gray-400 whitespace-nowrap">
-                          已发送
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-          {selected.size > 0 && (
-            <p className="mt-2 text-xs text-blue-500/90 dark:text-blue-300/90">
-              已选中 {selected.size} 句，按
-              <ShortcutRenderer
-                shortcut={shortcuts.voiceSendSelected.key}
-                className="mx-1 inline-block scale-90"
+          <ul
+            className={`space-y-0.5 ${ignoreMouse ? 'pointer-events-none' : ''}`}
+            onContextMenu={(event) => event.preventDefault()}
+          >
+            {segments.map((segment) => (
+              <TranscriptRow
+                key={segment.seq}
+                segment={segment}
+                selected={selected.has(segment.seq)}
+                focused={segment.seq === selection?.focus}
+                focusRef={focusRef}
               />
-              只发送选中内容
-            </p>
-          )}
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-gray-400">
+            {selected.size > 0 ? `已选中 ${selected.size} 句。` : ''}
+            左键选中，右键发送
+            {selected.size > 0 && (
+              <>
+                ，或按
+                <ShortcutRenderer
+                  shortcut={shortcuts.voiceSendSelected.key}
+                  className="mx-1 inline-block scale-90"
+                />
+              </>
+            )}
+          </p>
         </>
       )}
     </div>
   )
 }
 
-function ExchangeView({ exchange }: { exchange: VoiceExchange }) {
-  return (
-    <div>
-      <div className="mb-2 rounded-lg bg-gray-200/60 dark:bg-gray-700/60 px-3 py-2 text-sm">
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
-          <Mic className="h-3 w-3" />
-          {formatTime(exchange.askedAt)}
+const TranscriptRow = memo(
+  function TranscriptRow({
+    segment,
+    selected,
+    focused,
+    focusRef
+  }: {
+    segment: TranscriptSegment
+    selected: boolean
+    focused: boolean
+    focusRef: RefObject<HTMLLIElement | null>
+  }) {
+    const selectable = segment.status === 'done'
+    const sendFromHere = () => {
+      if (!selectable) return
+      void (async () => {
+        // Selecting an already selected line toggles it off, which would send the wrong text.
+        if (!selected) await window.api.voiceSelectSegment(segment.seq, false)
+        await window.api.voiceSendSelected()
+      })()
+    }
+    return (
+      <li
+        ref={focused ? focusRef : undefined}
+        className={`flex gap-2 text-sm leading-6 rounded-md px-1.5 -mx-1.5 select-none ${selectable ? 'cursor-pointer' : ''} ${selected ? 'bg-blue-500/15 ring-1 ring-blue-500/50' : selectable ? 'hover:bg-black/5 dark:hover:bg-white/5' : ''} ${segment.sent && !selected ? 'opacity-50' : ''}`}
+        onClick={(event) => {
+          if (selectable) void window.api.voiceSelectSegment(segment.seq, event.shiftKey)
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          sendFromHere()
+        }}
+      >
+        <span className="text-xs text-gray-400 font-mono pt-1 whitespace-nowrap">
+          {formatTime(segment.startedAt)}
+        </span>
+        {segment.status === 'pending' ? (
+          <span className="flex items-center gap-2 text-gray-400">
+            <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-r-2 border-current" />
+            识别中（{(segment.durationMs / 1000).toFixed(1)}s）
+          </span>
+        ) : segment.status === 'error' ? (
+          <span className="text-red-400 break-words">识别失败：{segment.error}</span>
+        ) : (
+          <span className="break-words flex-1">
+            {segment.text}
+            {segment.sent && (
+              <span className="ml-2 text-[10px] text-gray-400 whitespace-nowrap">已发送</span>
+            )}
+          </span>
+        )}
+      </li>
+    )
+  },
+  (prev, next) =>
+    prev.selected === next.selected &&
+    prev.focused === next.focused &&
+    prev.segment.seq === next.segment.seq &&
+    prev.segment.status === next.segment.status &&
+    prev.segment.text === next.segment.text &&
+    prev.segment.error === next.segment.error &&
+    prev.segment.sent === next.segment.sent &&
+    prev.segment.startedAt === next.segment.startedAt
+)
+
+const ExchangeView = memo(
+  function ExchangeView({ exchange }: { exchange: VoiceExchange }) {
+    return (
+      <div className="voice-lazy">
+        <div className="mb-2 rounded-lg bg-gray-200/60 dark:bg-gray-700/60 px-3 py-2 text-sm">
+          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
+            <Mic className="h-3 w-3" />
+            {formatTime(exchange.askedAt)}
+          </div>
+          <div className="whitespace-pre-wrap break-words">{exchange.question}</div>
         </div>
-        <div className="whitespace-pre-wrap break-words">{exchange.question}</div>
+        {exchange.status === 'error' ? (
+          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-sm text-red-300/90">
+            API 调用失败：{exchange.error}
+          </div>
+        ) : (
+          <>
+            <MarkdownRenderer>{exchange.answer}</MarkdownRenderer>
+            {exchange.status === 'stopped' && (
+              <p className="text-xs text-gray-400 mt-1">（已停止生成）</p>
+            )}
+          </>
+        )}
       </div>
-      {exchange.status === 'error' ? (
-        <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-sm text-red-300/90">
-          API 调用失败：{exchange.error}
-        </div>
-      ) : (
-        <>
-          <MarkdownRenderer>{exchange.answer}</MarkdownRenderer>
-          {exchange.status === 'stopped' && (
-            <p className="text-xs text-gray-400 mt-1">（已停止生成）</p>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
+    )
+  },
+  (prev, next) =>
+    prev.exchange.id === next.exchange.id &&
+    prev.exchange.question === next.exchange.question &&
+    prev.exchange.answer === next.exchange.answer &&
+    prev.exchange.status === next.exchange.status &&
+    prev.exchange.error === next.exchange.error
+)
 
 function VoiceStatusBar({
   listening,
@@ -464,3 +568,5 @@ function VoiceStatusBar({
     </div>
   )
 }
+
+export default memo(VoicePage)

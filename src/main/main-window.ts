@@ -3,12 +3,40 @@ import { shell, app, BrowserWindow, ipcMain, screen } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+function keepTransparentWindowInSync(mainWindow: BrowserWindow): void {
+  // Windows layered windows keep the first web-contents size after a drag-resize,
+  // so the native window grows and the extra area stays transparent.
+  if (process.platform !== 'win32') return
+  let suppress = 0
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const nudge = () => {
+    timer = null
+    if (suppress > 0 || mainWindow.isDestroyed() || mainWindow.isMinimized()) return
+    const bounds = mainWindow.getBounds()
+    if (bounds.width < 2 || bounds.height < 2) return
+    suppress += 1
+    mainWindow.setBounds({ ...bounds, width: bounds.width + 1 })
+    mainWindow.setBounds(bounds)
+    suppress -= 1
+    mainWindow.webContents.invalidate()
+  }
+  mainWindow.on('resize', () => {
+    if (suppress > 0 || mainWindow.isDestroyed()) return
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(nudge, 80)
+  })
+  mainWindow.on('closed', () => {
+    if (timer) clearTimeout(timer)
+  })
+}
+
 export function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     hasShadow: false,
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -27,6 +55,7 @@ export function createWindow(): void {
   global.mainWindow = mainWindow
 
   mainWindow.setMenuBarVisibility(false)
+  keepTransparentWindowInSync(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()

@@ -129,7 +129,7 @@ export function CustomShortcuts() {
           <Shortcut label="选中下一句" shortcut="voiceSelectNext" />
           <Shortcut
             label="发送选中断句"
-            description="只把选中的断句发给大模型并继续监听；未选中时发送最新一句"
+            description="左键选中断句，右键或快捷键发送并继续监听；未选中时快捷键发送最新一句"
             shortcut="voiceSendSelected"
           />
         </div>

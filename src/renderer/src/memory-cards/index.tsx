@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, startTransition, useEffect, useRef, useState } from 'react'
+import { OpenVoiceButton } from '@/components/OpenVoiceButton'
+import { useRegisterPageScroll } from '@/lib/use-page-scroll'
 import { useNavigate, useLocation } from 'react-router'
 import {
   ArrowLeft,
@@ -23,9 +25,7 @@ import {
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { useMemoryCardsStore } from '@/lib/store/memory-cards'
 
-const SCROLL_OFFSET = 120
-
-export default function MemoryCardsPage() {
+function MemoryCardsPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const locationState = location.state as { cardId?: unknown } | null
@@ -52,10 +52,19 @@ export default function MemoryCardsPage() {
   const [pendingDeleteCardId, setPendingDeleteCardId] = useState<string | null>(null)
   const [pendingFocusTitleCardId, setPendingFocusTitleCardId] = useState<string | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const contentRef = useRegisterPageScroll('/memory-cards')
+  const [paintBody, setPaintBody] = useState(false)
 
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? cards[0]
   const selectedCardIndex = cards.findIndex((card) => card.id === selectedCard?.id)
   const draggingCard = cards.find((card) => card.id === draggingCardId) ?? null
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      startTransition(() => setPaintBody(true))
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [])
 
   useEffect(() => {
     if (!isEditMode || !selectedCard || pendingFocusTitleCardId !== selectedCard.id) return
@@ -84,13 +93,6 @@ export default function MemoryCardsPage() {
   }, [draggingCardId])
 
   useEffect(() => {
-    window.api.updateAppState({ inCoderPage: true })
-    return () => {
-      window.api.updateAppState({ inCoderPage: false })
-    }
-  }, [])
-
-  useEffect(() => {
     if (requestedCardId) {
       selectCard(requestedCardId)
     } else {
@@ -109,37 +111,9 @@ export default function MemoryCardsPage() {
     }
   }, [openDefaultCard])
 
-  useEffect(() => {
-    window.api.onScrollPageUp(() => {
-      const container = document.getElementById('app-content')
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop - window.innerHeight + SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    return () => {
-      window.api.removeScrollPageUpListener()
-    }
-  }, [])
-
-  useEffect(() => {
-    window.api.onScrollPageDown(() => {
-      const container = document.getElementById('app-content')
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop + window.innerHeight - SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    return () => {
-      window.api.removeScrollPageDownListener()
-    }
-  }, [])
-
   return (
     <>
-      <div id="app-header" className="flex items-center px-3">
+      <div className="app-header flex items-center px-3">
         <div className="actions">
           <Button
             variant="ghost"
@@ -151,8 +125,11 @@ export default function MemoryCardsPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </div>
-        <h1 className="flex-1 text-center font-medium select-none">记忆卡片</h1>
+        <h1 className="window-drag flex-1 h-full flex items-center justify-center font-medium select-none">
+          记忆卡片
+        </h1>
         <div className="actions flex items-center gap-1">
+          <OpenVoiceButton />
           <Button
             variant="ghost"
             size="icon"
@@ -174,7 +151,7 @@ export default function MemoryCardsPage() {
         </div>
       </div>
 
-      <div id="app-content" className="px-6 py-4 pb-10">
+      <div ref={contentRef} className="app-content px-6 py-4 pb-10">
         <div className="flex gap-4 items-start">
           {showCardPanel && (
             <aside className="w-[240px] shrink-0 rounded-xl border border-gray-200/70 dark:border-gray-700/60 bg-white/70 dark:bg-gray-900/40 backdrop-blur-sm p-3">
@@ -338,12 +315,10 @@ export default function MemoryCardsPage() {
                     placeholder="输入 Markdown 笔记内容..."
                     className="w-full min-h-[calc(100vh-190px)] bg-white/80 dark:bg-gray-800/80 font-mono text-sm"
                   />
-                ) : selectedCard.content.trim() ? (
-                  <MarkdownRenderer>{selectedCard.content}</MarkdownRenderer>
+                ) : paintBody ? (
+                  <CardStack cards={cards} selectedId={selectedCard.id} />
                 ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    该卡片暂无内容，点击右上角铅笔图标进入编辑模式。
-                  </div>
+                  <div className="text-sm text-gray-400">正在准备卡片…</div>
                 )}
               </>
             ) : (
@@ -405,3 +380,58 @@ export default function MemoryCardsPage() {
     </>
   )
 }
+
+const CardArticle = memo(function CardArticle({ content }: { content: string }) {
+  if (!content.trim()) {
+    return (
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        该卡片暂无内容，点击右上角铅笔图标进入编辑模式。
+      </div>
+    )
+  }
+  return <MarkdownRenderer>{content}</MarkdownRenderer>
+})
+
+function CardStack({
+  cards,
+  selectedId
+}: {
+  cards: { id: string; content: string }[]
+  selectedId: string
+}) {
+  const [warm, setWarm] = useState<string[]>(() => [selectedId])
+  const shownIds = warm.includes(selectedId) ? warm : [selectedId, ...warm]
+
+  useEffect(() => {
+    setWarm((current) => (current.includes(selectedId) ? current : [...current, selectedId]))
+  }, [selectedId])
+
+  useEffect(() => {
+    const next = cards.find((card) => !warm.includes(card.id) && card.id !== selectedId)
+    if (!next) return
+    const handle = window.requestIdleCallback(() => {
+      startTransition(() => {
+        setWarm((current) => (current.includes(next.id) ? current : [...current, next.id]))
+      })
+    })
+    return () => window.cancelIdleCallback(handle)
+  }, [cards, selectedId, warm])
+
+  return (
+    <div className="card-stack">
+      {cards
+        .filter((card) => shownIds.includes(card.id))
+        .map((card) => (
+          <div
+            key={card.id}
+            className="card-read"
+            data-active={card.id === selectedId ? 'true' : 'false'}
+          >
+            <CardArticle content={card.content} />
+          </div>
+        ))}
+    </div>
+  )
+}
+
+export default memo(MemoryCardsPage)

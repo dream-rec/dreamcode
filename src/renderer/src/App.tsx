@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route, useNavigate } from 'react-router'
+import { memo, useEffect, useState, startTransition, type ReactNode } from 'react'
+import { HashRouter, useLocation, useNavigate } from 'react-router'
 import { toast, Toaster } from 'sonner'
 import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
@@ -8,14 +8,14 @@ import MemoryCardsPage from '@/memory-cards'
 import VoicePage from '@/voice'
 import { VoiceCaptureController } from '@/voice/VoiceCaptureController'
 import { useSettingsStore } from '@/lib/store/settings'
-import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useMemoryCardsStore } from '@/lib/store/memory-cards'
+import { currentShortcutMap, hydrateUserProfile } from '@/lib/profile-sync'
+import { scrollActivePage, setActivePath } from '@/lib/active-path'
 
 export default function App() {
   const [initialized, setInitialized] = useState(false)
   const settingsStore = useSettingsStore()
   const syncSettings = useSettingsStore((state) => state.syncSettings)
-  const { shortcuts } = useShortcutsStore()
 
   useEffect(() => {
     let disposed = false
@@ -24,11 +24,12 @@ export default function App() {
       receivedNotification = true
       syncSettings(settings)
     })
-    window.api
-      .getAppSettings()
+    hydrateUserProfile()
+      .then(() => window.api.getAppSettings())
       .then((settings) => {
         if (disposed) return
         if (!receivedNotification) syncSettings(settings)
+        window.api.initShortcuts(currentShortcutMap())
         setInitialized(true)
       })
       .catch((error: unknown) => {
@@ -56,6 +57,15 @@ export default function App() {
     document.body.style.opacity = settingsStore.opacity.toString()
   }, [settingsStore.opacity])
 
+  useEffect(() => {
+    window.api.onScrollPageUp(() => scrollActivePage(-1))
+    window.api.onScrollPageDown(() => scrollActivePage(1))
+    return () => {
+      window.api.removeScrollPageUpListener()
+      window.api.removeScrollPageDownListener()
+    }
+  }, [])
+
   // Apply dark mode class
   useEffect(() => {
     if (settingsStore.theme === 'dark') {
@@ -65,29 +75,97 @@ export default function App() {
     }
   }, [settingsStore.theme])
 
-  useEffect(() => {
-    window.api.initShortcuts(shortcuts)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <>
       <HashRouter>
         <ShortcutNavigator />
         <VoiceCaptureController />
-        {initialized && (
-          <Routes>
-            <Route index element={<CoderPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="about" element={<AboutPage />} />
-            <Route path="memory-cards" element={<MemoryCardsPage />} />
-            <Route path="voice" element={<VoicePage />} />
-          </Routes>
-        )}
+        {initialized && <PersistentPages />}
       </HashRouter>
 
       <Toaster />
     </>
+  )
+}
+
+const StableSettings = memo(SettingsPage)
+const StableAbout = memo(AboutPage)
+
+function PersistentPages() {
+  const { pathname } = useLocation()
+  const [mounted, setMounted] = useState<Record<string, boolean>>({ '/': true })
+
+  useEffect(() => {
+    setMounted((current) => (current[pathname] ? current : { ...current, [pathname]: true }))
+  }, [pathname])
+
+  useEffect(() => {
+    setActivePath(pathname)
+    window.api.updateAppState({
+      inCoderPage: pathname === '/' || pathname === '/memory-cards'
+    })
+  }, [pathname])
+
+  useEffect(() => {
+    const warmAll = () => {
+      startTransition(() => {
+        setMounted((current) => ({
+          ...current,
+          '/': true,
+          '/settings': true,
+          '/about': true,
+          '/voice': true,
+          '/memory-cards': true
+        }))
+      })
+    }
+    const idle = window.requestIdleCallback?.(warmAll, { timeout: 800 })
+    const timer = window.setTimeout(warmAll, 700)
+    return () => {
+      if (idle !== undefined) window.cancelIdleCallback?.(idle)
+      window.clearTimeout(timer)
+    }
+  }, [])
+
+  return (
+    <>
+      <PageSlot active={pathname === '/'} mounted={mounted['/'] === true}>
+        <CoderPage />
+      </PageSlot>
+      <PageSlot active={pathname === '/settings'} mounted={mounted['/settings'] === true}>
+        <StableSettings />
+      </PageSlot>
+      <PageSlot active={pathname === '/about'} mounted={mounted['/about'] === true}>
+        <StableAbout />
+      </PageSlot>
+      <PageSlot active={pathname === '/memory-cards'} mounted={mounted['/memory-cards'] === true}>
+        <MemoryCardsPage />
+      </PageSlot>
+      <PageSlot active={pathname === '/voice'} mounted={mounted['/voice'] === true}>
+        <VoicePage />
+      </PageSlot>
+    </>
+  )
+}
+
+function PageSlot({
+  active,
+  mounted,
+  children
+}: {
+  active: boolean
+  mounted: boolean
+  children: ReactNode
+}) {
+  if (!mounted) return null
+  return (
+    <div
+      className="app-page"
+      data-active={active ? 'true' : 'false'}
+      inert={active ? undefined : true}
+    >
+      {children}
+    </div>
   )
 }
 

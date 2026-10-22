@@ -73,7 +73,7 @@ const getShortcutDescription = (action: string) => {
     clearVoiceSession: '清空语音对话',
     voiceSelectPrev: '选中上一句识别内容',
     voiceSelectNext: '选中下一句识别内容',
-    voiceSendSelected: '只发送选中的断句（未选中时发送最新一句）',
+    voiceSendSelected: '只发送选中的断句（左键选中，右键或快捷键发送；未选中时快捷键发送最新一句）',
     pageUp: '向上翻页',
     pageDown: '向下翻页',
     backToCoderPage: '返回主解题页',

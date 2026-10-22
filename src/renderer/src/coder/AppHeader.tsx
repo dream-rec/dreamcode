@@ -1,6 +1,8 @@
-import { SettingsIcon, Sun, Moon, StickyNote, Github, Mic } from 'lucide-react'
+import type { CSSProperties } from 'react'
+import { SettingsIcon, Sun, Moon, StickyNote, Github } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
+import { OpenVoiceButton } from '@/components/OpenVoiceButton'
 import { useAppStore } from '@/lib/store/app'
 import { useSettingsStore } from '@/lib/store/settings'
 
@@ -10,7 +12,7 @@ export function AppHeader() {
   const { theme, updateSetting } = useSettingsStore()
 
   return (
-    <div id="app-header" className="flex items-center justify-between px-3">
+    <div className="app-header flex items-center justify-between px-3">
       {/* macOS traffic light buttons */}
       <div
         className={`actions flex items-center gap-1.5 ${ignoreMouse ? 'pointer-events-none' : ''}`}
@@ -32,22 +34,17 @@ export function AppHeader() {
         />
       </div>
 
-      {/* Title */}
-      <div className="font-medium select-none">DreamCode</div>
+      <div className="window-drag flex-1 h-full flex items-center justify-center font-medium select-none">
+        DreamCode
+      </div>
 
       {/* Right actions */}
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
+        <OpenVoiceButton />
         <Button
           variant="ghost"
-          className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
-          onClick={() => navigate('/voice')}
-          title="语音助手"
-        >
-          <Mic className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          className="size-7 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+          className="size-8 cursor-pointer hover:bg-black/10 dark:hover:bg-white/10 rounded-md"
+          style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
           onClick={() => navigate('/memory-cards')}
           title="记忆卡片"
         >

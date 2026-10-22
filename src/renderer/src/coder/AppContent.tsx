@@ -1,69 +1,58 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { getActivePath, subscribeActivePath } from '@/lib/active-path'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { useSolutionStore } from '@/lib/store/solution'
 import MarkdownRenderer from '@/components/MarkdownRenderer'
 import ShortcutRenderer from '@/components/ShortcutRenderer'
-
-const SCROLL_OFFSET = 120
+import { useRegisterPageScroll } from '@/lib/use-page-scroll'
 
 export function AppContent() {
-  const {
-    screenshotData,
-    solutionChunks,
-    errorMessage,
-    setErrorMessage,
-    screenshotSnapshot,
-    syncScreenshot
-  } = useSolutionStore()
+  const screenshotData = useSolutionStore((state) => state.screenshotData)
+  const errorMessage = useSolutionStore((state) => state.errorMessage)
+  const setErrorMessage = useSolutionStore((state) => state.setErrorMessage)
+  const screenshotSnapshot = useSolutionStore((state) => state.screenshotSnapshot)
+  const syncScreenshot = useSolutionStore((state) => state.syncScreenshot)
   const recentScreenshots = screenshotSnapshot?.recentScreenshots ?? []
+  const contentRef = useRegisterPageScroll('/')
+  const [solutionText, setSolutionText] = useState(() =>
+    useSolutionStore.getState().solutionChunks.join('')
+  )
 
   useEffect(() => {
-    let active = true
+    const pull = () => {
+      if (getActivePath() !== '/') return
+      const text = useSolutionStore.getState().solutionChunks.join('')
+      setSolutionText((current) => (current === text ? current : text))
+    }
+    pull()
+    const unsubStore = useSolutionStore.subscribe(pull)
+    const unsubPath = subscribeActivePath(pull)
+    return () => {
+      unsubStore()
+      unsubPath()
+    }
+  }, [])
+
+  useEffect(() => {
+    let current = true
     const unsubscribe = window.api.onScreenshotState(syncScreenshot)
     window.api
       .getScreenshotState()
       .then((snapshot) => {
-        if (active) syncScreenshot(snapshot)
+        if (current) syncScreenshot(snapshot)
       })
       .catch((error: unknown) => {
-        if (active) setErrorMessage(String(error))
+        if (current) setErrorMessage(String(error))
       })
     return () => {
-      active = false
+      current = false
       unsubscribe()
     }
   }, [syncScreenshot, setErrorMessage])
 
-  useEffect(() => {
-    window.api.onScrollPageUp(() => {
-      const container = document.getElementById('app-content')
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop - window.innerHeight + SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    return () => {
-      window.api.removeScrollPageUpListener()
-    }
-  }, [])
-
-  useEffect(() => {
-    window.api.onScrollPageDown(() => {
-      const container = document.getElementById('app-content')
-      if (!container) return
-      container.scrollTo({
-        top: container.scrollTop + window.innerHeight - SCROLL_OFFSET,
-        behavior: 'smooth'
-      })
-    })
-    return () => {
-      window.api.removeScrollPageDownListener()
-    }
-  }, [])
-
   return (
-    <div id="app-content" className="px-6 py-4 pb-10">
+    <div ref={contentRef} className="app-content px-6 py-4 pb-10">
       {/* Error Banner */}
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-start gap-3">
@@ -142,12 +131,13 @@ export function AppContent() {
       )}
 
       {/* Solution Display */}
-      <MarkdownRenderer>{solutionChunks.join('')}</MarkdownRenderer>
+      <MarkdownRenderer>{solutionText}</MarkdownRenderer>
     </div>
   )
 }
 
 function ShortcutTip() {
+  const navigate = useNavigate()
   const { shortcuts } = useShortcutsStore()
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-gray-400 select-none">
@@ -164,14 +154,18 @@ function ShortcutTip() {
         <ShortcutRenderer shortcut={shortcuts.appendScreenshot.key} className="inline-block" />{' '}
         追加截图，停止截图 2 秒后自动分析；已有回答时自动保留完整前文追问
       </div>
-      <div className="text-sm">
-        或按
+      <button
+        type="button"
+        className="text-sm rounded-md px-2 py-1 hover:bg-black/5 dark:hover:bg-white/10"
+        onClick={() => navigate('/voice')}
+      >
+        点击进入监听页面，或按
         <ShortcutRenderer
           shortcut={shortcuts.toggleVoiceListening.key}
           className="mx-1 scale-90 inline-block"
         />
-        监听会议音频，让语音助手解答口头提问
-      </div>
+        开始监听
+      </button>
     </div>
   )
 }

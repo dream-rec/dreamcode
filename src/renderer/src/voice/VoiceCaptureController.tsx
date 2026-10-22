@@ -18,6 +18,17 @@ export function VoiceCaptureController() {
   const setSnapshot = useVoiceStore((state) => state.setSnapshot)
   const appendAnswer = useVoiceStore((state) => state.appendAnswer)
   const setLevel = useVoiceStore((state) => state.setLevel)
+  const latestLevel = useRef(-100)
+  const levelFrame = useRef(0)
+  const publishLevelRef = useRef<(db: number) => void>(() => {})
+  publishLevelRef.current = (db: number) => {
+    latestLevel.current = db
+    if (levelFrame.current) return
+    levelFrame.current = window.requestAnimationFrame(() => {
+      levelFrame.current = 0
+      setLevel(latestLevel.current)
+    })
+  }
 
   useEffect(() => {
     window.api.voiceGetSnapshot().then(setSnapshot)
@@ -66,7 +77,7 @@ export function VoiceCaptureController() {
                 })
               },
               onLevel: (db) => {
-                if (sessionRef.current === current) setLevel(db)
+                if (sessionRef.current === current) publishLevelRef.current(db)
               },
               onEnded: (reason) => {
                 if (sessionRef.current !== current) return

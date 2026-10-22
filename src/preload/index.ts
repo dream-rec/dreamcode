@@ -2,6 +2,8 @@ import type { ScreenshotSnapshot } from '../shared/screenshot'
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
+import type { AppearanceSettings, MemoryCardsPersisted, UserProfile } from '../shared/user-profile'
+import type { ShortcutDefinition } from '../shared/shortcuts'
 import type { AppState } from '../main/state'
 import type { VoiceConfig } from '../shared/settings'
 import type {
@@ -30,6 +32,19 @@ const api = {
 
   // Get app settings
   getAppSettings: () => ipcRenderer.invoke('getAppSettings'),
+  getUserProfile: (): Promise<UserProfile | null> => ipcRenderer.invoke('getUserProfile'),
+  saveUserProfile: (profile: UserProfile): Promise<UserProfile> =>
+    ipcRenderer.invoke('saveUserProfile', profile),
+  saveAppearance: (appearance: AppearanceSettings): Promise<UserProfile> =>
+    ipcRenderer.invoke('saveAppearance', appearance),
+  saveShortcuts: (shortcuts: Record<string, ShortcutDefinition>): Promise<UserProfile> =>
+    ipcRenderer.invoke('saveShortcuts', shortcuts),
+  saveMemoryCards: (memoryCards: MemoryCardsPersisted): Promise<UserProfile> =>
+    ipcRenderer.invoke('saveMemoryCards', memoryCards),
+  recoverLegacyProfile: (): Promise<UserProfile | null> =>
+    ipcRenderer.invoke('recoverLegacyProfile'),
+  importLegacyConfigIfEmpty: (settings: unknown): Promise<boolean> =>
+    ipcRenderer.invoke('importLegacyConfigIfEmpty', settings),
   // Update app settings
   updateAppSettings: (settings: Partial<AppSettings>) =>
     ipcRenderer.invoke('updateAppSettings', settings),

@@ -48,7 +48,7 @@ Alt+, ──▶ 从任意页面返回语音助手页
 │  ├ 指定应用：native helper 的 PCM │ ─────▶ │  ├ exchanges: 问答历史         │
 │  ├ UtteranceSegmenter (能量 VAD)  │ 段音频 │  ├ pendingTranscriptions       │
 │  └ WAV 编码 → voice:pushSegment   │        │  └ conversation (LLM 上下文)    │
-│                                   │        │ stt.ts       POST /audio/transcriptions 或 /stt
+│                                   │        │ stt.ts       POST /audio/transcriptions、/stt 或 /chat/completions
 │ VoicePage (/voice) 仅展示 store   │ ◀───── │ ai.ts        getVoiceAnswerStream  │
 │ useVoiceStore  ← voice-state      │ 状态/  │ app-audio.ts helper 进程 / PCM 解码 │
 │                ← voice-answer-chunk│ 流式块 │ shortcuts.ts 快捷键 → voice.*     │
@@ -105,11 +105,12 @@ main → renderer 通过 `voice-capture-command` 下发 `start / flush / stop`�
   | `OpenAI（/audio/transcriptions）` | 同上 | `https://api.openai.com/v1` / `gpt-4o-mini-transcribe` |
   | `Groq Whisper（/audio/transcriptions）` | 同上 | `https://api.groq.com/openai/v1` / `whisper-large-v3-turbo` |
   | `grok2api（/stt）` | `POST {baseURL}/stt` | `http://127.0.0.1:8000/v1` / `grok-stt` |
+  | `Qwen ASR（/chat/completions）` | `POST {baseURL}/chat/completions` | `https://dashscope.aliyuncs.com/compatible-mode/v1` / `qwen3-asr-flash` |
 
   没有单独的「自定义」选项：预设之外的网关直接选 `OpenAI（/audio/transcriptions）` 再改 Base URL / 模型，行为与之前一致（旧配置里的 `provider: 'custom'` 归一化为 `openai`，已填的地址与模型不动）。选项名一律用 ASCII，不使用中文厂商名。
 
   切换协议只填补空白或仍是其他预设默认值的字段，自建的 Base URL / 模型名（例如远端 grok2api 网关）不会被覆盖。
-- OpenAI 兼容分支：multipart 上传 16 kHz 单声道 PCM16 WAV，字段 `model`、`response_format=json`，可选 `language`；Grok2API 分支：同一份 multipart（字段名 `file`）+ `model`，并在填写了 `language` 时追加 `format=true`（上游要求 `format` 必须同时给 `language`，否则 400）。
+- OpenAI 兼容分支：multipart 上传 16 kHz 单声道 PCM16 WAV，字段 `model`、`response_format=json`，可选 `language`；Grok2API 分支：同一份 multipart（字段名 `file`）+ `model`，并在填写了 `language` 时追加 `format=true`（上游要求 `format` 必须同时给 `language`，否则 400）。百炼 Qwen ASR 分支：JSON `POST /chat/completions`，音频为 `data:audio/wav;base64,...`，可选 `asr_options.language`（留空则自动识别），`enable_itn` 固定开启。业务空间域名（`https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`）走同一条路径，把 Base URL 改成该地址即可。默认模型 `qwen3-asr-flash` 覆盖一句以内的同步识别；文件转写异步模型不在此协议里。
 - 已验证可用的服务：OpenAI（`whisper-1` / `gpt-4o-mini-transcribe`）、硅基流动（`FunAudioLLM/SenseVoiceSmall`）、Groq（`whisper-large-v3-turbo`）、Grok2API 的 `/stt`（mock 网关验证）。
 - 每段一请求，并发发出，`seq` 保证显示顺序；单请求 45 s 超时。空结果的段会被静默移除（避免噪声产生空行）。
 - 不发送任何识别提示词（`prompt`）：各家对 prompt 的支持与长度限制不一致，对会议音频也没有实际收益。
@@ -257,7 +258,7 @@ helper stdout（macOS float32 / Windows PCM16 48k stereo）─▶ 重采样为 1
   audioAppId: string,            // 指定软件；空 = 全部系统声音
   audioAppName: string,          // 该软件不在运行时的回显名
   stt: {
-    provider: 'siliconflow' | 'openai' | 'groq' | 'grok2api' | 'custom',
+    provider: 'siliconflow' | 'openai' | 'groq' | 'grok2api' | 'qwen-asr' | 'custom',
     apiBaseURL, apiKey, model, language, extraHeaders, proxyUrl
   },
   llmMode: 'shared' | 'custom',

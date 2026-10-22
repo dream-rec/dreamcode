@@ -181,7 +181,13 @@ export function VoiceSettings({ value, onChange }: VoiceSettingsProps) {
             <Input
               type={showSttKey ? 'text' : 'password'}
               value={value.stt.apiKey}
-              placeholder={value.stt.provider === 'grok2api' ? 'g2a_...' : undefined}
+              placeholder={
+                value.stt.provider === 'grok2api'
+                  ? 'g2a_...'
+                  : value.stt.provider === 'qwen-asr'
+                    ? 'sk-...'
+                    : undefined
+              }
               onChange={(event) => updateStt({ apiKey: event.target.value })}
             />
             <Button
